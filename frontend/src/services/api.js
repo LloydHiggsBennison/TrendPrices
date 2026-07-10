@@ -1,4 +1,10 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+let API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+
+// Normalización proactiva: Si se configuró la URL sin el sufijo "/api", lo agregamos automáticamente.
+if (API_URL && !API_URL.endsWith('/api') && !API_URL.endsWith('/api/')) {
+  const base = API_URL.endsWith('/') ? API_URL.slice(0, -1) : API_URL;
+  API_URL = `${base}/api`;
+}
 
 /**
  * Realiza peticiones HTTP
