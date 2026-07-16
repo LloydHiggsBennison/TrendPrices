@@ -160,7 +160,7 @@ export default function MathResults({ mathResults }) {
           </div>
         </div>
 
-        {/* 5. Recta Tangente */}
+        {/* 5. Proyección */}
         <div className="bg-slate-800/40 p-5 rounded-2xl border border-slate-700/20 flex flex-col justify-between md:col-span-2 lg:col-span-2">
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -169,12 +169,17 @@ export default function MathResults({ mathResults }) {
               </span>
               <Sigma size={20} className="text-purple-400" />
             </div>
-            <h3 className="text-lg font-bold text-slate-200 mb-2">Recta Tangente de Proyección</h3>
+            <h3 className="text-lg font-bold text-slate-200 mb-2">Proyección a 7 Días (Regresión + Estacionalidad)</h3>
             <div className="bg-slate-900/60 font-mono text-center text-xl font-bold py-3 px-4 rounded-xl text-purple-300 border border-slate-700/40 mb-3">
-              T(t) = P(a) + P'(a)(t - a) &rarr; Mañana: {formatCurrency(currentResult.projectedPrice)}
+              Mañana: {formatCurrency(currentResult.projectedPrice)}
+              {currentResult.projectionConfidence != null && (
+                <span className="block text-xs text-slate-400 font-sans font-normal mt-1">
+                  Confiabilidad del modelo: {currentResult.projectionConfidence}/100
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Aproxima el precio futuro cercano mediante linealización local con la recta tangente. Evalúa la tendencia inmediata en el día base a.
+              Combina la tendencia lineal, el patrón estacional por día de la semana y variables externas (dólar, IPC, eventos de retail). Ver el detalle completo de los 7 días más abajo.
             </p>
           </div>
         </div>

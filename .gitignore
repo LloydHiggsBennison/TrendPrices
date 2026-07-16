@@ -10,3 +10,5 @@ build/
 *.log
 .system_generated/
 .gemini/
+*backup*/
+.backup_*/

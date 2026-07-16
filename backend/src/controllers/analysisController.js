@@ -1,6 +1,9 @@
 const knastaService = require('../services/knastaService');
 const supabaseService = require('../services/supabaseService');
 const mathService = require('../services/mathService');
+const forecastService = require('../services/forecastService');
+const externalFactorsService = require('../services/externalFactorsService');
+const retailEventsService = require('../services/retailEventsService');
 const recommendationService = require('../services/recommendationService');
 const normalizePrice = require('../utils/normalizePrice');
 const normalizeDate = require('../utils/normalizeDate');
@@ -37,6 +40,19 @@ function generateFallbackHistory(currentPrice, storeName, days = 30) {
     });
   }
   return history;
+}
+
+/**
+ * Normaliza un texto para comparaciones exactas (sin tildes, minúsculas, sin espacios extra).
+ */
+function normalizeText(text) {
+  return (text || '')
+    .toString()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
@@ -110,6 +126,12 @@ async function getAnalysis(req, res) {
     });
 
     const storesAnalysis = [];
+
+    // Variables externas (dólar, IPC) y eventos de retail próximos: se obtienen una sola vez
+    // por request y se reutilizan para todas las tiendas del producto.
+    const externalIndicators = await externalFactorsService.getExternalIndicators();
+    const upcomingEvents = retailEventsService.getUpcomingEvents(new Date(), 7);
+
     for (const storeName of storesList) {
       const storeHistory = historyByStore[storeName];
       const storeDbRecord = history.find(h => h.tiendas.nombre === storeName);
@@ -117,10 +139,12 @@ async function getAnalysis(req, res) {
       const current = storeHistory[storeHistory.length - 1];
       const prices = storeHistory.map(h => h.price);
       
+      const linear = mathService.estimateLinearFunction(storeHistory);
       const derivativeDetails = mathService.getDerivativeDetails(storeHistory);
       const avgPrice = mathService.calculateAveragePrice(storeHistory);
       const limit = mathService.calculateEstimatedLimit(storeHistory);
-      const projection = mathService.calculateTangentProjection(storeHistory, 1);
+      const weekProjection = forecastService.project7Days(storeHistory, externalIndicators);
+      const projection = weekProjection.days[0]?.projectedPrice ?? mathService.calculateTangentProjection(storeHistory, 1);
       
       storesAnalysis.push({
         storeId: storeDbRecord.tiendas.id,
@@ -136,12 +160,14 @@ async function getAnalysis(req, res) {
         averagePrice: avgPrice,
         limitEstimated: limit,
         projectedPrice: projection,
+        weekProjection: weekProjection.days,
+        projectionConfidence: weekProjection.confidence,
         linearFunction: linear.functionText,
         storeUrl: storeDbRecord.tiendas.url_tienda || ''
       });
     }
 
-    const recommendation = recommendationService.generateRecommendation(storesAnalysis);
+    const recommendation = recommendationService.generateRecommendation(storesAnalysis, upcomingEvents);
     const comparisonMatrix = mathService.buildComparisonMatrix(recommendation.storesWithScores);
 
     return res.json({
@@ -157,10 +183,18 @@ async function getAnalysis(req, res) {
         derivativeEndDate: sa.derivativeEndDate,
         averagePrice: sa.averagePrice,
         limitEstimated: sa.limitEstimated,
-        projectedPrice: sa.projectedPrice
+        projectedPrice: sa.projectedPrice,
+        weekProjection: sa.weekProjection,
+        projectionConfidence: sa.projectionConfidence
       })),
       comparisonMatrix,
-      recommendation
+      recommendation,
+      externalFactors: {
+        dolar: externalIndicators.dolar,
+        ipc: externalIndicators.ipc,
+        isFallback: externalIndicators.isFallback,
+        upcomingEvents
+      }
     });
   } catch (error) {
     console.error('AnalysisController: Error al obtener análisis:', error.message);
@@ -195,14 +229,26 @@ async function runAnalysis(req, res) {
     }
 
     // Calcular score de relevancia y ordenar los productos de mayor a menor coincidencia
+    const normalizedQuery = normalizeText(query);
     const scoredProducts = products.map(p => ({
       product: p,
-      score: getQueryMatchScore(p.name, query)
+      score: getQueryMatchScore(p.name, query),
+      isExactMatch: normalizeText(p.name) === normalizedQuery
     }));
-    
-    // Ordenar por relevancia descendente
-    scoredProducts.sort((a, b) => b.score - a.score);
-    const sortedProducts = scoredProducts.map(sp => sp.product);
+
+    // Ordenar por relevancia descendente, priorizando siempre coincidencias exactas con Knasta
+    scoredProducts.sort((a, b) => {
+      if (a.isExactMatch !== b.isExactMatch) return a.isExactMatch ? -1 : 1;
+      return b.score - a.score;
+    });
+
+    // Nos quedamos únicamente con productos que realmente concuerdan con lo que Knasta
+    // devolvió para la búsqueda (score > 0), evitando arrastrar resultados sin relación
+    // (p. ej. accesorios cuando se busca la consola). Esto asegura que lo mostrado en la
+    // app sea exactamente lo que Knasta indica para esa búsqueda, no una aproximación.
+    const relevantProducts = scoredProducts.filter(sp => sp.isExactMatch || sp.score > 0);
+    const sortedProducts = (relevantProducts.length > 0 ? relevantProducts : scoredProducts)
+      .map(sp => sp.product);
 
     // Agrupar por tienda y tomar los mejores resultados
     // Tomamos los 5 primeros resultados de diferentes tiendas si es posible (en orden de relevancia)
@@ -234,6 +280,11 @@ async function runAnalysis(req, res) {
     });
 
     const storesAnalysis = [];
+
+    // Variables externas (dólar, IPC) y eventos de retail próximos: se obtienen una sola vez
+    // por request y se reutilizan para todas las tiendas del producto.
+    const externalIndicators = await externalFactorsService.getExternalIndicators();
+    const upcomingEvents = retailEventsService.getUpcomingEvents(new Date(), 7);
     
     // 3. Para cada tienda seleccionada, obtener historial y guardar en BD
     for (const p of selectedProducts) {
@@ -276,7 +327,8 @@ async function runAnalysis(req, res) {
       const derivativeDetails = mathService.getDerivativeDetails(rawHistory);
       const avgPrice = mathService.calculateAveragePrice(rawHistory);
       const limit = mathService.calculateEstimatedLimit(rawHistory);
-      const projection = mathService.calculateTangentProjection(rawHistory, 1);
+      const weekProjection = forecastService.project7Days(rawHistory, externalIndicators);
+      const projection = weekProjection.days[0]?.projectedPrice ?? mathService.calculateTangentProjection(rawHistory, 1);
 
       const analysisRecord = {
         storeId,
@@ -292,6 +344,8 @@ async function runAnalysis(req, res) {
         averagePrice: avgPrice,
         limitEstimated: limit,
         projectedPrice: projection,
+        weekProjection: weekProjection.days,
+        projectionConfidence: weekProjection.confidence,
         linearFunction: linear.functionText,
         m: linear.m,
         b: linear.b,
@@ -311,13 +365,20 @@ async function runAnalysis(req, res) {
         precioPromedio: avgPrice,
         limiteEstimado: limit,
         precioProyectado: projection,
+        proyeccion7d: weekProjection.days,
+        confianzaProyeccion: weekProjection.confidence,
+        factoresExternos: {
+          dolar: externalIndicators.dolar,
+          ipc: externalIndicators.ipc,
+          eventosProximos: upcomingEvents
+        },
         puntaje: 0, // Se actualizará al ponderar recomendaciones
         tendencia: derivativeDetails.value < 0 ? 'Baja' : (derivativeDetails.value > 0 ? 'Alza' : 'Estable')
       });
     }
 
     // 5. Generar recomendación y ponderación de puntajes
-    const recommendation = recommendationService.generateRecommendation(storesAnalysis);
+    const recommendation = recommendationService.generateRecommendation(storesAnalysis, upcomingEvents);
     
     // Guardar recomendación en Supabase
     await supabaseService.saveRecommendation({
@@ -353,10 +414,18 @@ async function runAnalysis(req, res) {
         derivativeEndDate: sa.derivativeEndDate,
         averagePrice: sa.averagePrice,
         limitEstimated: sa.limitEstimated,
-        projectedPrice: sa.projectedPrice
+        projectedPrice: sa.projectedPrice,
+        weekProjection: sa.weekProjection,
+        projectionConfidence: sa.projectionConfidence
       })),
       comparisonMatrix,
-      recommendation
+      recommendation,
+      externalFactors: {
+        dolar: externalIndicators.dolar,
+        ipc: externalIndicators.ipc,
+        isFallback: externalIndicators.isFallback,
+        upcomingEvents
+      }
     });
 
   } catch (error) {

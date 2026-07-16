@@ -4,6 +4,7 @@ import ProductSummary from '../components/ProductSummary';
 import StoreComparisonTable from '../components/StoreComparisonTable';
 import PriceHistoryChart from '../components/PriceHistoryChart';
 import MathResults from '../components/MathResults';
+import WeekProjection from '../components/WeekProjection';
 import MatrixTable from '../components/MatrixTable';
 import RecommendationCard from '../components/RecommendationCard';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -81,6 +82,8 @@ export default function ProductAnalysis() {
           </div>
 
           <MathResults mathResults={analysisData.mathResults} />
+
+          <WeekProjection mathResults={analysisData.mathResults} externalFactors={analysisData.externalFactors} />
           
           <MatrixTable comparisonMatrix={analysisData.comparisonMatrix} />
         </div>

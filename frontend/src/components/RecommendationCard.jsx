@@ -3,7 +3,8 @@ import {
   AlertTriangle, 
   HelpCircle, 
   Clock, 
-  Info 
+  Info,
+  PartyPopper
 } from 'lucide-react';
 
 export default function RecommendationCard({ recommendation }) {
@@ -44,6 +45,14 @@ export default function RecommendationCard({ recommendation }) {
           textColor: 'text-orange-400',
           glowClass: 'glow-border-warning',
           icon: <AlertTriangle size={32} className="text-orange-400" />
+        };
+      case 'Esperar evento':
+        return {
+          title: 'ESPERAR EVENTO DE RETAIL',
+          bgColor: 'bg-fuchsia-500/10 border-fuchsia-500/30',
+          textColor: 'text-fuchsia-400',
+          glowClass: 'glow-border-warning',
+          icon: <PartyPopper size={32} className="text-fuchsia-400" />
         };
       case 'Esperar':
       default:

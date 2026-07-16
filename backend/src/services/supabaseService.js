@@ -278,6 +278,9 @@ async function saveMathAnalysis(analysisData) {
       precioPromedio,
       limiteEstimado,
       precioProyectado,
+      proyeccion7d,
+      confianzaProyeccion,
+      factoresExternos,
       puntaje,
       tendencia
     } = analysisData;
@@ -294,6 +297,9 @@ async function saveMathAnalysis(analysisData) {
         precio_promedio: precioPromedio,
         limite_estimado: limiteEstimado,
         precio_proyectado: precioProyectado,
+        proyeccion_7d: proyeccion7d || null,
+        confianza_proyeccion: confianzaProyeccion || null,
+        factores_externos: factoresExternos || null,
         puntaje: puntaje,
         tendencia: tendencia
       })

@@ -54,6 +54,9 @@ CREATE TABLE analisis_matematico (
     precio_promedio NUMERIC,
     limite_estimado NUMERIC,
     precio_proyectado NUMERIC,
+    proyeccion_7d JSONB,
+    confianza_proyeccion NUMERIC,
+    factores_externos JSONB,
     puntaje NUMERIC,
     tendencia TEXT,
     fecha_analisis TIMESTAMP DEFAULT NOW()

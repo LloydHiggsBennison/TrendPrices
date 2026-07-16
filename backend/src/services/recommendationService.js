@@ -54,9 +54,10 @@ function calculateStoreScore(storeAnalysis, isCheapestStore = false) {
 /**
  * Genera la recomendación final comparando los análisis de todas las tiendas.
  * @param {Array} storesAnalysis Lista de análisis de cada tienda
+ * @param {Array} upcomingEvents Eventos de retail (CyberDay, Black Friday, etc.) dentro de los próximos 7 días
  * @returns {Object} { decision, descripcion, puntaje_final, tienda_recomendada }
  */
-function generateRecommendation(storesAnalysis) {
+function generateRecommendation(storesAnalysis, upcomingEvents = []) {
   if (!Array.isArray(storesAnalysis) || storesAnalysis.length === 0) {
     return {
       decision: 'Esperar',
@@ -97,8 +98,18 @@ function generateRecommendation(storesAnalysis) {
     derivative,
     projectedPrice,
     discount,
-    storeName
+    storeName,
+    weekProjection
   } = recommendedStore;
+
+  // Si hay un evento de retail (CyberDay, Black Friday, Navidad, etc.) dentro de los próximos
+  // 7 días y el mínimo proyectado para esa tienda en la semana es notoriamente menor al precio
+  // actual, priorizamos avisar del evento por sobre las demás reglas (salvo que ya esté en su
+  // mínimo histórico, en cuyo caso comprar ahora sigue siendo mejor idea).
+  const proximoEvento = upcomingEvents && upcomingEvents.length > 0 ? upcomingEvents[0] : null;
+  const minProyectadoSemana = Array.isArray(weekProjection) && weekProjection.length > 0
+    ? Math.min(...weekProjection.map(d => d.projectedPrice))
+    : projectedPrice;
 
   // Reglas de recomendación estructuradas
   if (!recommendedStore.available) {
@@ -108,10 +119,14 @@ function generateRecommendation(storesAnalysis) {
     // Si el precio actual está cerca del precio mínimo histórico (dentro del 2%)
     decision = 'Comprar ahora';
     descripcion = `¡Excelente oportunidad! El precio actual en ${storeName} ($${currentPrice.toLocaleString()}) está en su mínimo histórico registrado ($${minPrice.toLocaleString()}). Es el mejor momento para comprar.`;
+  } else if (proximoEvento && minProyectadoSemana <= currentPrice * (1 + proximoEvento.impactoPromedio * 0.5)) {
+    // Si viene un evento de retail dentro de la semana y la proyección indica una baja relevante
+    decision = 'Esperar evento';
+    descripcion = `Se acerca ${proximoEvento.nombre} (en ${proximoEvento.diasRestantes} día${proximoEvento.diasRestantes === 1 ? '' : 's'}, el ${proximoEvento.fecha}). Nuestro modelo proyecta que el precio en ${storeName} podría bajar hasta $${minProyectadoSemana.toLocaleString()} durante ese evento, por lo que conviene esperar.`;
   } else if (projectedPrice < currentPrice && derivative < 0) {
     // Si la derivada es negativa y el precio proyectado es menor
     decision = 'Esperar';
-    descripcion = `El precio en ${storeName} está bajando a una tasa de $${Math.abs(derivative).toLocaleString()} por día. Te recomendamos esperar ya que la proyección indica un valor menor ($${projectedPrice.toLocaleString()}) para los próximos días.`;
+    descripcion = `El precio en ${storeName} está bajando a una tasa de $${Math.abs(derivative).toLocaleString()} por día. Te recomendamos esperar ya que la proyección a 7 días indica un valor menor (hasta $${minProyectadoSemana.toLocaleString()}) en los próximos días.`;
   } else if (currentPrice < averagePrice) {
     // Si el precio actual está bajo el promedio histórico
     decision = 'Buena oportunidad';
@@ -119,11 +134,11 @@ function generateRecommendation(storesAnalysis) {
   } else if (derivative > 0) {
     // Si la derivada es positiva (precio subiendo)
     decision = 'Precio en aumento';
-    descripcion = `¡Cuidado! El precio en ${storeName} está subiendo. El valor actual es de $${currentPrice.toLocaleString()} y la tendencia diaria es alcista. Si necesitas el producto urgente, compra pronto antes de otra alza.`;
+    descripcion = `¡Cuidado! El precio en ${storeName} está subiendo. El valor actual es de $${currentPrice.toLocaleString()} y la proyección a 7 días no muestra bajas. Si necesitas el producto urgente, compra pronto antes de otra alza.`;
   } else if (projectedPrice > currentPrice) {
     // Si el precio proyectado es mayor que el actual
     decision = 'Comprar pronto';
-    descripcion = `La recta tangente proyecta un incremento cercano en el precio de ${storeName} hacia los $${projectedPrice.toLocaleString()}. Sugerimos realizar la compra pronto para evitar el aumento.`;
+    descripcion = `El modelo de regresión con estacionalidad proyecta un incremento cercano en el precio de ${storeName} hacia los $${projectedPrice.toLocaleString()}. Sugerimos realizar la compra pronto para evitar el aumento.`;
   } else {
     // Default estable
     decision = 'Esperar';

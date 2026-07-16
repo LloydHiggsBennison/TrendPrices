@@ -85,5 +85,12 @@ La plataforma calcula dinámicamente y expone los siguientes conceptos del cálc
 2. **Derivada aproximada**: Mide la tasa instantánea de cambio diario: $P'(t) \approx \frac{P(t_2) - P(t_1)}{t_2 - t_1}$. Si es negativa, indica que el precio baja.
 3. **Precio promedio (Integral)**: Aproxima la integral definida mediante promedio discreto para obtener la base de comparación histórica del producto: $P_{prom} = \frac{1}{b-a}\int_a^b P(t)dt \approx \frac{1}{n}\sum P_i$.
 4. **Límite al infinito**: Calcula el precio asintótico mínimo histórico o soporte inferior: $\lim_{t\to\infty} P(t) = L$.
-5. **Recta tangente de proyección**: Proyecta el precio del día siguiente usando linealización local alrededor del último punto registrado: $T(t) = P(a) + P'(a)(t - a)$.
+5. **Proyección a 7 días (Regresión + Estacionalidad + Variables Externas)**: Extiende la tendencia lineal calculando índices estacionales por día de la semana (residuos promedio por día) y ajustando cada uno de los 7 días proyectados con:
+   - **Eventos de retail** (CyberDay, CyberMonday, Black Friday, Fiestas Patrias, Navidad, liquidaciones de verano), aplicando el impacto porcentual histórico promedio de cada evento.
+   - **Tipo de cambio USD/CLP** (dólar observado, vía [mindicador.cl](https://mindicador.cl)), con un *pass-through* parcial (30%) sobre la proyección.
+   - **IPC / Inflación** (vía mindicador.cl), prorrateado diariamente como deriva de fondo sobre el nivel de precios.
+   
+   Además se calcula un **puntaje de confiabilidad (0-100)** en base a la cantidad de datos históricos disponibles, el ajuste (R²) del modelo de tendencia, y la disponibilidad real (no fallback) de las variables externas.
 6. **Matriz Comparativa**: Genera una matriz que sintetiza todos los indicadores y calcula un puntaje ponderado de recomendación de compra para cada tienda.
+
+> **Nota sobre variables externas:** el sistema consulta la API pública gratuita [mindicador.cl](https://mindicador.cl/api) para obtener el dólar observado y el IPC. Si esta API no está disponible, se usan valores de respaldo conservadores y se marca la proyección con menor confiabilidad, mostrando esto explícitamente en el frontend.
