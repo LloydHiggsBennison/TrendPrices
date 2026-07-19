@@ -42,7 +42,7 @@ export default function Home() {
           <span>Inteligencia y Cálculo de Precios</span>
         </div>
         <h1 className="text-5xl md:text-6xl font-black tracking-tight mb-4 font-sans bg-clip-text text-transparent bg-gradient-to-r from-slate-100 via-indigo-200 to-purple-200">
-          PriceTrend
+          TrendPrices
         </h1>
         <p className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed">
           Análisis matemático de tendencias de precios basado en <span className="text-indigo-400 font-semibold">Knasta.cl</span>

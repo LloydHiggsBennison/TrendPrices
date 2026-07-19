@@ -1,7 +1,7 @@
 {
-  "name": "pricetrend-backend",
+  "name": "trendprices-backend",
   "version": "1.0.0",
-  "description": "Backend API for PriceTrend - Mathematical Analysis of Price Trends based on Knasta",
+  "description": "Backend API for TrendPrices - Mathematical Analysis of Price Trends based on Knasta",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",

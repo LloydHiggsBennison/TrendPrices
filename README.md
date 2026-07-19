@@ -1,6 +1,6 @@
-# PriceTrend: Sistema Web de Análisis Matemático de Tendencias de Precios
+# TrendPrices: Sistema Web de Análisis Matemático de Tendencias de Precios
 
-PriceTrend es una plataforma web completa que permite consultar información histórica de precios de productos utilizando Knasta como fuente principal de datos. A partir de estos datos, la plataforma aplica herramientas matemáticas de cálculo diferencial e integral para analizar tendencias, calcular variaciones, estimar precios promedio, proyectar valores futuros cercanos y entregar recomendaciones de compra inteligentes.
+TrendPrices es una plataforma web completa que permite consultar información histórica de precios de productos utilizando Knasta como fuente principal de datos. A partir de estos datos, la plataforma aplica herramientas matemáticas de cálculo diferencial e integral para analizar tendencias, calcular variaciones, estimar precios promedio, proyectar valores futuros cercanos y entregar recomendaciones de compra inteligentes.
 
 El sistema está diseñado de forma modular, separando la obtención de datos (Knasta), el almacenamiento (Supabase con PostgreSQL) y el análisis matemático.
 

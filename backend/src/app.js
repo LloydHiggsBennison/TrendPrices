@@ -20,7 +20,7 @@ app.use('/api/analysis', analysisRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'PriceTrend Backend running successfully' });
+  res.json({ status: 'ok', message: 'TrendPrices Backend running successfully' });
 });
 
 // 404 handler

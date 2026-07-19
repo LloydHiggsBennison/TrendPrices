@@ -17,7 +17,7 @@ export default function App() {
         {/* Premium footer */}
         <footer className="py-8 border-t border-slate-800/40 text-center text-xs text-slate-500">
           <div className="container mx-auto px-4">
-            <p className="mb-2 font-medium">PriceTrend &copy; {new Date().getFullYear()} - Sistema de Análisis Matemático de Tendencias de Precios</p>
+            <p className="mb-2 font-medium">TrendPrices &copy; {new Date().getFullYear()} - Sistema de Análisis Matemático de Tendencias de Precios</p>
             <p>Utiliza herramientas avanzadas de cálculo diferencial e integral para modelar tendencias de Knasta.</p>
           </div>
         </footer>
