@@ -16,6 +16,8 @@ export default function SearchForm({ onSearch, isLoading }) {
       <div className="relative flex items-center">
         <input
           type="text"
+          aria-label="Buscar producto en Knasta"
+          maxLength={200}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Ej: Adidas Samba, iPhone 15, PlayStation 5..."
@@ -28,7 +30,7 @@ export default function SearchForm({ onSearch, isLoading }) {
           className="absolute right-2 px-6 h-10 flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:from-slate-700 disabled:to-slate-700 text-white rounded-xl font-medium transition-all shadow-md active:scale-95 disabled:pointer-events-none"
         >
           <Search size={18} />
-          <span>{isLoading ? 'Analizando...' : 'Analizar'}</span>
+          <span>{isLoading ? 'Consultando...' : 'Buscar'}</span>
         </button>
       </div>
     </form>

@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ProductSummary from '../components/ProductSummary';
 import StoreComparisonTable from '../components/StoreComparisonTable';
 import PriceHistoryChart from '../components/PriceHistoryChart';
 import MathResults from '../components/MathResults';
+import AnalysisNotices from '../components/AnalysisNotices';
 import WeekProjection from '../components/WeekProjection';
 import MatrixTable from '../components/MatrixTable';
 import RecommendationCard from '../components/RecommendationCard';
@@ -19,9 +20,10 @@ export default function ProductAnalysis() {
   const [error, setError] = useState(null);
   const [analysisData, setAnalysisData] = useState(null);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    setAnalysisData(null);
     try {
       const data = await getAnalysis(productId);
       setAnalysisData(data);
@@ -31,11 +33,11 @@ export default function ProductAnalysis() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [productId]);
 
   useEffect(() => {
     loadData();
-  }, [productId]);
+  }, [loadData]);
 
   return (
     <div className="container mx-auto px-4 py-12 max-w-6xl">
@@ -72,13 +74,14 @@ export default function ProductAnalysis() {
       {/* Resultados del Análisis */}
       {!isLoading && analysisData && (
         <div className="space-y-6 animate-[fadeIn_0.5s_ease-out]">
+          <AnalysisNotices data={analysisData} />
           <RecommendationCard recommendation={analysisData.recommendation} />
           
           <ProductSummary product={analysisData.product} />
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="space-y-6">
             <StoreComparisonTable stores={analysisData.stores} />
-            <PriceHistoryChart priceHistory={analysisData.priceHistory} />
+            <PriceHistoryChart priceHistory={analysisData.priceHistory} mathResults={analysisData.mathResults} />
           </div>
 
           <MathResults mathResults={analysisData.mathResults} />

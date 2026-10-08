@@ -13,9 +13,9 @@ export default function ProductSummary({ product }) {
           <div className="p-3 bg-indigo-500/10 text-indigo-400 rounded-lg">
             <Bookmark size={20} />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Producto</p>
-            <p className="text-base font-semibold text-slate-200 line-clamp-1" title={product.nombre}>
+            <p className="text-base font-semibold text-slate-200 break-words" title={product.nombre}>
               {product.nombre}
             </p>
           </div>
@@ -25,10 +25,10 @@ export default function ProductSummary({ product }) {
           <div className="p-3 bg-purple-500/10 text-purple-400 rounded-lg">
             <Tag size={20} />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Marca</p>
             <p className="text-base font-semibold text-slate-200">
-              {product.marca || 'Genérica'}
+              {product.marca || 'No informada'}
             </p>
           </div>
         </div>
@@ -37,10 +37,10 @@ export default function ProductSummary({ product }) {
           <div className="p-3 bg-pink-500/10 text-pink-400 rounded-lg">
             <Layers size={20} />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Categoría</p>
             <p className="text-base font-semibold text-slate-200">
-              {product.categoria || 'Otros'}
+              {product.categoria || 'No informada'}
             </p>
           </div>
         </div>
@@ -49,7 +49,7 @@ export default function ProductSummary({ product }) {
           <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-lg">
             <HardDrive size={20} />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Fuente Principal</p>
             <p className="text-base font-semibold text-slate-200">
               Knasta.cl

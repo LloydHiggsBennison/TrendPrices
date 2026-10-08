@@ -5,8 +5,8 @@ const knastaService = require('../services/knastaService');
  */
 async function searchProducts(req, res) {
   try {
-    const { query } = req.query;
-    if (!query) {
+    const query = typeof req.query.query === 'string' ? req.query.query.trim() : '';
+    if (!query || query.length > 200) {
       return res.status(400).json({ error: 'El parámetro "query" es requerido.' });
     }
 

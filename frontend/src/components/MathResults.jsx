@@ -38,7 +38,7 @@ export default function MathResults({ mathResults }) {
         </h2>
         
         {/* Selector de Tienda */}
-        <div className="flex gap-2 bg-slate-900/60 p-1 rounded-xl border border-slate-700/30">
+        <div className="flex flex-wrap gap-2 bg-slate-900/60 p-1 rounded-xl border border-slate-700/30">
           {mathResults.map(r => (
             <button
               key={r.storeName}
@@ -84,12 +84,15 @@ export default function MathResults({ mathResults }) {
               </span>
               <Compass size={20} className="text-indigo-400" />
             </div>
-            <h3 className="text-lg font-bold text-slate-200 mb-2">Función de Precio Estimar</h3>
+            <h3 className="text-lg font-bold text-slate-200 mb-2">Regresión Lineal por Mínimos Cuadrados</h3>
             <div className="bg-slate-900/60 font-mono text-center text-xl font-bold py-3 px-4 rounded-xl text-indigo-300 border border-slate-700/40 mb-3">
               {currentResult.linearFunction}
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Modela el precio P(t) como función del tiempo en días. Representa la tendencia lineal promedio de los datos de Knasta.
+              t representa los días desde {formatDate(currentResult.regression?.startDate)}. Pendiente m: {currentResult.regression?.m?.toLocaleString('es-CL', { maximumFractionDigits: 4 })} CLP/día. Intercepto b: {formatCurrency(currentResult.regression?.b)}.
+            </p>
+            <p className="text-xs text-indigo-300 mt-2">
+              R²: {currentResult.regression?.rSquared == null ? 'No disponible' : currentResult.regression.rSquared.toFixed(4)} · {currentResult.regression?.sampleCount ?? 0} observaciones válidas. R² mide el ajuste histórico; no garantiza la predicción.
             </p>
           </div>
         </div>
@@ -108,11 +111,11 @@ export default function MathResults({ mathResults }) {
               {getDerivativeIcon(currentResult.derivative)}
               <span>
                 {currentResult.derivative > 0 ? '+' : ''}
-                {currentResult.derivative.toLocaleString('es-CL')} CLP/día
+                {currentResult.derivative == null ? 'No disponible' : currentResult.derivative.toLocaleString('es-CL', { maximumFractionDigits: 2 })} CLP/día
               </span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Mide la tasa de variación instantánea del precio: P'(t) ≈ ΔP / Δt. Negativa indica que el precio está disminuyendo.
+              Mide la tasa de variación media entre las fechas indicadas: P'(t) ≈ ΔP / Δt. Negativa indica que el precio está disminuyendo.
             </p>
             {currentResult.derivativeStartDate && currentResult.derivativeEndDate && (
               <p className="text-[10px] text-slate-400 font-mono mt-3 bg-slate-950/60 p-2 rounded-xl border border-slate-800/60 text-center">
@@ -136,7 +139,7 @@ export default function MathResults({ mathResults }) {
               {formatCurrency(currentResult.averagePrice)}
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Calculado como aproximación discreta de la integral definida: P_prom = 1/(b-a) ∫ P(t) dt. Sirve como base neutra de comparación.
+              Promedio ponderado por tiempo mediante la regla del trapecio: P_prom = ∫ P(t) dt / duración. Respeta la separación real entre observaciones.
             </p>
           </div>
         </div>
@@ -146,16 +149,16 @@ export default function MathResults({ mathResults }) {
           <div>
             <div className="flex items-center justify-between mb-4">
               <span className="text-xs uppercase font-bold tracking-wider text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-md">
-                Análisis de Límites
+                Estadística Histórica
               </span>
               <Anchor size={20} className="text-emerald-400" />
             </div>
-            <h3 className="text-lg font-bold text-slate-200 mb-2">Límite al Infinito (L)</h3>
+            <h3 className="text-lg font-bold text-slate-200 mb-2">Mínimo Histórico Observado</h3>
             <div className="bg-slate-900/60 font-mono text-center text-xl font-bold py-3 px-4 rounded-xl text-emerald-300 border border-slate-700/40 mb-3">
               {formatCurrency(currentResult.limitEstimated)}
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Modelo de estabilización asintótica: lim (t → ∞) P(t) = L. Indica el precio mínimo histórico (el valor máximo soporte de mercado).
+              Es el menor precio válido del período observado. No es un límite matemático ni un precio futuro garantizado.
             </p>
           </div>
         </div>
@@ -169,17 +172,17 @@ export default function MathResults({ mathResults }) {
               </span>
               <Sigma size={20} className="text-purple-400" />
             </div>
-            <h3 className="text-lg font-bold text-slate-200 mb-2">Proyección a 7 Días (Regresión + Estacionalidad)</h3>
+            <h3 className="text-lg font-bold text-slate-200 mb-2">Proyección a 7 Días</h3>
             <div className="bg-slate-900/60 font-mono text-center text-xl font-bold py-3 px-4 rounded-xl text-purple-300 border border-slate-700/40 mb-3">
-              Mañana: {formatCurrency(currentResult.projectedPrice)}
+              {currentResult.projectedPrice == null ? 'Proyección no disponible' : `${formatDate(currentResult.weekProjection?.[0]?.date)}: ${formatCurrency(currentResult.projectedPrice)}`}
               {currentResult.projectionConfidence != null && (
                 <span className="block text-xs text-slate-400 font-sans font-normal mt-1">
-                  Confiabilidad del modelo: {currentResult.projectionConfidence}/100
+                  Índice de calidad del ajuste: {currentResult.projectionConfidence}/100
                 </span>
               )}
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Combina la tendencia lineal, el patrón estacional por día de la semana y variables externas (dólar, IPC, eventos de retail). Ver el detalle completo de los 7 días más abajo.
+              {currentResult.projectionWarning || (currentResult.insufficientHistory ? 'Se requieren al menos tres fechas válidas y siete días de historial para proyectar.' : 'Extrapola la regresión desde la última fecha observada. Solo aplica estacionalidad con al menos cuatro observaciones de cada día de la semana. Los indicadores económicos son contexto y no alteran el precio proyectado.')}
             </p>
           </div>
         </div>

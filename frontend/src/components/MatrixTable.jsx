@@ -25,7 +25,7 @@ export default function MatrixTable({ comparisonMatrix }) {
               <th className="py-3 px-3 text-center">Disp.</th>
               <th className="py-3 px-3 text-right">Derivada</th>
               <th className="py-3 px-3 text-right">Promedio</th>
-              <th className="py-3 px-3 text-right">Lím. (L)</th>
+              <th className="py-3 px-3 text-right">Mín. observado</th>
               <th className="py-3 px-3 text-right">Proyección</th>
               <th className="py-3 px-3 text-center text-indigo-400 font-extrabold bg-indigo-500/5">Puntaje Final</th>
             </tr>
@@ -79,7 +79,7 @@ export default function MatrixTable({ comparisonMatrix }) {
                   <td className={`py-3.5 px-3 text-right font-mono ${
                     derivative < 0 ? 'text-emerald-400' : (derivative > 0 ? 'text-rose-400' : 'text-amber-400')
                   }`}>
-                    {derivative > 0 ? '+' : ''}{derivative}
+                    {derivative > 0 ? '+' : ''}{derivative == null ? '—' : derivative.toLocaleString('es-CL', { maximumFractionDigits: 2 })}
                   </td>
                   <td className="py-3.5 px-3 text-right text-slate-400 font-mono">
                     {formatCurrency(averagePrice)}

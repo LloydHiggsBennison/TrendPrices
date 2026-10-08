@@ -2,6 +2,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const normalizePrice = require('../utils/normalizePrice');
 const normalizeDate = require('../utils/normalizeDate');
+const { cleanHistory } = require('../utils/cleanHistory');
 
 // User agent para simular navegación real y ser responsables
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -57,7 +58,7 @@ async function searchProduct(query) {
           const knastaUrl = `https://knasta.cl/detail/${p.retail}/${p.product_id}/${slug}`;
           
           // El precio actual es el precio más bajo (con tarjeta o internet)
-          const currentPrice = normalizePrice(p.price_card || p.current_price);
+          const currentPrice = normalizePrice(p.current_price || p.price_internet);
           
           // El precio normal es el precio internet o el anterior (last_variation_price)
           let normalPrice = normalizePrice(p.price_internet || p.last_variation_price || p.current_price);
@@ -67,9 +68,7 @@ async function searchProduct(query) {
           
           // Si percent es negativo, es un descuento real. Si es positivo es un alza (se considera 0 de descuento)
           let discount = 0;
-          if (p.percent < 0) {
-            discount = Math.abs(p.percent);
-          } else if (normalPrice > currentPrice) {
+          if (normalPrice > currentPrice) {
             discount = Math.round(100 * (normalPrice - currentPrice) / normalPrice);
           }
           
@@ -80,13 +79,15 @@ async function searchProduct(query) {
           return {
             id: p.kid || `${p.retail}#${p.product_id}`,
             name: p.title,
-            brand: p.brand || p.brand_title || 'Genérica',
-            category: p.category_name || 'Otros',
+            brand: p.brand || null,
+            category: p.category_name || null,
             retail: p.retail,
             retailLabel: p.retail_label,
             currentPrice,
             normalPrice,
             discount,
+            available: p.available !== false,
+            currentDate: normalizeDate(p.current_day),
             image: p.image || p.thumbnail_image,
             knastaUrl: knastaUrl,
             storeUrl: storeUrl
@@ -128,7 +129,7 @@ async function searchProduct(query) {
       });
     }
 
-    return products;
+    return products.filter(p => p.currentPrice > 0 && p.name && p.knastaUrl);
   } catch (error) {
     console.error(`KnastaService: Error en searchProduct para "${query}":`, error.message);
     throw error;
@@ -183,19 +184,17 @@ async function getPriceHistory(productUrl) {
  * Normaliza los datos crudos del producto de Knasta al formato requerido por el backend.
  */
 function normalizeKnastaProduct(rawData) {
-  const brand = rawData.brand || 'Genérica';
-  const category = rawData.category_name || 'Otros';
+  const brand = rawData.brand || null;
+  const category = rawData.category_name || null;
   
-  const currentPrice = normalizePrice(rawData.price_card || rawData.current_price);
+  const currentPrice = normalizePrice(rawData.current_price || rawData.price_internet);
   let normalPrice = normalizePrice(rawData.price_internet || rawData.last_variation_price || rawData.current_price);
   if (normalPrice < currentPrice) {
     normalPrice = currentPrice;
   }
   
   let discount = 0;
-  if (rawData.percent < 0) {
-    discount = Math.abs(rawData.percent);
-  } else if (normalPrice > currentPrice) {
+  if (normalPrice > currentPrice) {
     discount = Math.round(100 * (normalPrice - currentPrice) / normalPrice);
   }
   
@@ -226,14 +225,12 @@ function normalizeKnastaProduct(rawData) {
 function normalizeKnastaHistory(dprices, storeName) {
   if (!Array.isArray(dprices)) return [];
   
-  return dprices.map(dp => {
+  return cleanHistory(dprices.map(dp => {
     const price = normalizePrice(dp.price);
     const normalPrice = normalizePrice(dp.price_normal || dp.price);
     let discount = 0;
     
-    if (dp.discount) {
-      discount = Math.abs(dp.discount);
-    } else if (normalPrice > price) {
+    if (normalPrice > price) {
       discount = Math.round(100 * (normalPrice - price) / normalPrice);
     }
 
@@ -245,7 +242,7 @@ function normalizeKnastaHistory(dprices, storeName) {
       available: dp.available !== false,
       date: normalizeDate(dp.date)
     };
-  });
+  }));
 }
 
 module.exports = {

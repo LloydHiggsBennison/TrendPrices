@@ -17,9 +17,9 @@ import { CalendarClock, ShieldCheck, ShieldAlert, ShieldQuestion, PartyPopper } 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
 
 function getConfidenceStyle(confidence) {
-  if (confidence >= 70) return { icon: ShieldCheck, className: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20', label: 'Alta confiabilidad' };
-  if (confidence >= 40) return { icon: ShieldQuestion, className: 'text-amber-400 bg-amber-500/10 border-amber-500/20', label: 'Confiabilidad moderada' };
-  return { icon: ShieldAlert, className: 'text-rose-400 bg-rose-500/10 border-rose-500/20', label: 'Confiabilidad baja (pocos datos)' };
+  if (confidence >= 70) return { icon: ShieldCheck, className: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20', label: 'Índice de calidad alto' };
+  if (confidence >= 40) return { icon: ShieldQuestion, className: 'text-amber-400 bg-amber-500/10 border-amber-500/20', label: 'Índice de calidad moderado' };
+  return { icon: ShieldAlert, className: 'text-rose-400 bg-rose-500/10 border-rose-500/20', label: 'Índice de calidad bajo' };
 }
 
 export default function WeekProjection({ mathResults, externalFactors }) {
@@ -36,7 +36,7 @@ export default function WeekProjection({ mathResults, externalFactors }) {
   const ConfidenceIcon = confidenceStyle.icon;
 
   const chartData = {
-    labels: [formatDate(new Date().toISOString().split('T')[0], true), ...week.map(d => formatDate(d.date, true))],
+    labels: [formatDate(currentResult.projectionBaseDate, true), ...week.map(d => formatDate(d.date, true))],
     datasets: [
       {
         label: `Proyección — ${currentResult.storeName}`,
@@ -45,7 +45,7 @@ export default function WeekProjection({ mathResults, externalFactors }) {
         backgroundColor: 'rgba(168, 85, 247, 0.08)',
         borderDash: [6, 4],
         fill: true,
-        tension: 0.3,
+        tension: 0,
         pointRadius: 4,
         pointBackgroundColor: week.map(d => d.evento ? '#f59e0b' : '#a855f7'),
         pointHoverRadius: 6
@@ -109,11 +109,11 @@ export default function WeekProjection({ mathResults, externalFactors }) {
             Proyección de Precio a 7 Días
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            Regresión lineal + estacionalidad semanal + variables externas (dólar, IPC, eventos de retail)
+            Regresión lineal; estacionalidad solo con historial suficiente. Dólar e IPC se muestran como contexto.
           </p>
         </div>
 
-        <div className="flex gap-2 bg-slate-900/60 p-1 rounded-xl border border-slate-700/30">
+        <div className="flex flex-wrap gap-2 bg-slate-900/60 p-1 rounded-xl border border-slate-700/30">
           {mathResults.map(r => (
             <button
               key={r.storeName}
@@ -135,8 +135,9 @@ export default function WeekProjection({ mathResults, externalFactors }) {
         <span>{confidenceStyle.label} — {confidence}/100</span>
       </div>
 
+      <p className="text-xs text-slate-400 mb-4">Proyección desde {formatDate(currentResult.projectionBaseDate)}. El índice es una heurística de cantidad de datos y R², no una probabilidad de acierto. La extrapolación no garantiza precios futuros.</p>
       <div className="h-72 w-full relative mb-6">
-        <Line data={chartData} options={options} />
+        <Line data={chartData} options={options} role="img" aria-label="Proyección de precios durante siete días desde la última observación" />
       </div>
 
       {/* Desglose día por día */}
@@ -166,19 +167,20 @@ export default function WeekProjection({ mathResults, externalFactors }) {
         <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/20">
           <p className="text-xs uppercase font-bold text-indigo-400 mb-1">Dólar Observado (USD/CLP)</p>
           <p className="text-lg font-bold text-slate-100 font-mono">
-            {dolar ? `$${dolar.valorActual.toLocaleString('es-CL')}` : '—'}
+            {dolar?.valorActual != null ? `$${dolar.valorActual.toLocaleString('es-CL')}` : 'No disponible'}
           </p>
+          {dolar?.fecha && <p className="text-[11px] text-slate-400">Fecha del indicador: {formatDate(dolar.fecha)}</p>}
           <p className="text-[11px] text-slate-400 mt-1">
-            {dolar ? `Variación proyectada 7d: ${dolar.variacionPorcentual7d > 0 ? '+' : ''}${dolar.variacionPorcentual7d}%` : 'No disponible'}
+            {dolar?.variacionPorcentual7d != null ? `Variación normalizada a 7d: ${dolar.variacionPorcentual7d > 0 ? '+' : ''}${dolar.variacionPorcentual7d}%` : 'No disponible'}
           </p>
         </div>
         <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/20">
           <p className="text-xs uppercase font-bold text-pink-400 mb-1">IPC (Inflación)</p>
           <p className="text-lg font-bold text-slate-100 font-mono">
-            {ipc ? `${ipc.valorMensual}% mensual` : '—'}
+            {ipc?.valorMensual != null ? `${ipc.valorMensual}% mensual` : 'No disponible'}
           </p>
           <p className="text-[11px] text-slate-400 mt-1">
-            {ipc ? `Acumulado 12 meses: ${ipc.acumulado12m}%` : 'No disponible'}
+            {ipc?.acumulado12m != null ? `Acumulado compuesto de 12 meses: ${ipc.acumulado12m}%` : 'Acumulado de 12 meses no disponible'}
           </p>
         </div>
         <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/20">
@@ -193,14 +195,14 @@ export default function WeekProjection({ mathResults, externalFactors }) {
               </p>
             </>
           ) : (
-            <p className="text-sm text-slate-400">Sin eventos relevantes en los próximos 7 días.</p>
+            <p className="text-sm text-slate-400">No se aplican descuentos por eventos sin fechas e impactos verificados para este producto.</p>
           )}
         </div>
       </div>
 
       {externalFactors?.isFallback && (
         <p className="text-[11px] text-amber-400 mt-4">
-          * No se pudo consultar el indicador económico en tiempo real (mindicador.cl); se usaron valores de respaldo conservadores, lo que reduce la confiabilidad de la proyección.
+          * Los indicadores económicos no están disponibles (mindicador.cl). No se sustituyen por valores inventados ni se aplican ajustes al precio.
         </p>
       )}
     </div>

@@ -1,7 +1,6 @@
 import { 
   CheckCircle2, 
   AlertTriangle, 
-  HelpCircle, 
   Clock, 
   Info,
   PartyPopper
@@ -54,6 +53,10 @@ export default function RecommendationCard({ recommendation }) {
           glowClass: 'glow-border-warning',
           icon: <PartyPopper size={32} className="text-fuchsia-400" />
         };
+      case 'Sin señal clara':
+      case 'Datos insuficientes':
+      case 'Datos desactualizados':
+        return { title: dec.toUpperCase(), bgColor: 'bg-amber-500/10 border-amber-500/30', textColor: 'text-amber-400', glowClass: '', icon: <AlertTriangle size={32} className="text-amber-400" /> };
       case 'Esperar':
       default:
         return {
@@ -105,7 +108,7 @@ export default function RecommendationCard({ recommendation }) {
           <p className="mb-2 font-medium">{descripcion}</p>
           {tienda_recomendada && (
             <p className="text-xs text-slate-400 font-medium">
-              Tienda recomendada: <span className="text-indigo-300 font-bold">{tienda_recomendada.nombre}</span> con un precio de <span className="text-slate-200 font-bold">{tienda_recomendada.precio.toLocaleString('es-CL')} CLP</span>.
+              Tienda evaluada: <span className="text-indigo-300 font-bold">{tienda_recomendada.nombre}</span> con un precio de <span className="text-slate-200 font-bold">{tienda_recomendada.precio.toLocaleString('es-CL')} CLP</span>.
             </p>
           )}
         </div>
