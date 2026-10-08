@@ -22,7 +22,7 @@ El frontend usa `http://localhost:4000/api` por defecto. Copia los archivos `.en
 
 Para almacenamiento persistente, configura `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` **solo en el backend**. Ambas variables deben configurarse juntas. Sin ellas se utiliza memoria temporal y la interfaz lo indica: los enlaces dejan de funcionar al reiniciar el servidor. Cuando Supabase está configurado, un fallo de base de datos se informa como error y nunca se reemplaza silenciosamente por memoria.
 
-Las tablas requeridas se describen en [backend/sql/schema.sql](backend/sql/schema.sql). Ese archivo original comienza con `DROP TABLE`: no debe ejecutarse sobre una base con datos. Los cambios de esta revisión no requieren modificar el esquema existente.
+Las tablas requeridas se describen en [backend/sql/schema.sql](backend/sql/schema.sql). Ese archivo original comienza con `DROP TABLE`: no debe ejecutarse sobre una base con datos. Las migraciones incrementales de `supabase/migrations` restauran los permisos mínimos de `service_role` y añaden tres columnas de proyección que faltaban en la base desplegada, sin borrar registros. Deben ejecutarse como propietario de la base, en orden, después de revisar el SQL; no ejecutar `db push` sin reconciliar primero el historial de migraciones de la base existente.
 
 ## Uso y datos
 

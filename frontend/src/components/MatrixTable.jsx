@@ -22,7 +22,7 @@ export default function MatrixTable({ comparisonMatrix }) {
               <th className="py-3 px-3 text-right">Mín. Hist.</th>
               <th className="py-3 px-3 text-right">Máx. Hist.</th>
               <th className="py-3 px-3 text-center">Desc.</th>
-              <th className="py-3 px-3 text-center">Disp.</th>
+              <th className="py-3 px-3 text-center">Publicación</th>
               <th className="py-3 px-3 text-right">Derivada</th>
               <th className="py-3 px-3 text-right">Promedio</th>
               <th className="py-3 px-3 text-right">Mín. observado</th>
@@ -77,11 +77,12 @@ export default function MatrixTable({ comparisonMatrix }) {
                   </td>
                   <td className="py-3.5 px-3 text-center">
                     <span
-                      className={`inline-block w-2.5 h-2.5 rounded-full ${
-                        available ? "bg-emerald-500" : "bg-rose-500"
-                      }`}
-                      title={available ? "Disponible" : "Agotado"}
-                    />
+                      className={
+                        available ? "text-emerald-400" : "text-rose-400"
+                      }
+                    >
+                      {available ? "Publicado" : "No disponible"}
+                    </span>
                   </td>
                   <td
                     className={`py-3.5 px-3 text-right font-mono ${
