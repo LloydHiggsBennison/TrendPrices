@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { Search } from 'lucide-react';
+import { useState } from "react";
+import { Search } from "lucide-react";
 
 export default function SearchForm({ onSearch, isLoading }) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -30,7 +30,7 @@ export default function SearchForm({ onSearch, isLoading }) {
           className="absolute right-2 px-6 h-10 flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:from-slate-700 disabled:to-slate-700 text-white rounded-xl font-medium transition-all shadow-md active:scale-95 disabled:pointer-events-none"
         >
           <Search size={18} />
-          <span>{isLoading ? 'Consultando...' : 'Buscar'}</span>
+          <span>{isLoading ? "Consultando..." : "Buscar"}</span>
         </button>
       </div>
     </form>

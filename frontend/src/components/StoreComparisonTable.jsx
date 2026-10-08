@@ -1,5 +1,5 @@
-import formatCurrency from '../utils/formatCurrency';
-import { ExternalLink, CheckCircle, XCircle } from 'lucide-react';
+import formatCurrency from "../utils/formatCurrency";
+import { ExternalLink, CheckCircle, XCircle } from "lucide-react";
 
 export default function StoreComparisonTable({ stores }) {
   if (!stores || stores.length === 0) return null;
@@ -23,8 +23,8 @@ export default function StoreComparisonTable({ stores }) {
           </thead>
           <tbody className="divide-y divide-slate-800/50">
             {stores.map((store, index) => (
-              <tr 
-                key={store.storeId || index} 
+              <tr
+                key={store.storeId || index}
                 className="hover:bg-slate-800/30 transition-colors group"
               >
                 <td className="py-4 px-4 font-semibold text-slate-200">
@@ -62,7 +62,7 @@ export default function StoreComparisonTable({ stores }) {
                 </td>
                 <td className="py-4 px-4 text-right">
                   <a
-                    href={store.storeUrl || '#'}
+                    href={store.storeUrl || "#"}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-400 hover:text-indigo-300 bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/15 hover:border-indigo-500/25 px-3 py-1.5 rounded-lg transition-all group-hover:translate-x-0.5"

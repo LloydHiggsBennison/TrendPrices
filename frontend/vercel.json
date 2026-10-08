@@ -1,1 +1,1 @@
-{"rewrites":[{"source":"/analysis/:path*","destination":"/index.html"}]}
+{ "rewrites": [{ "source": "/analysis/:path*", "destination": "/index.html" }] }

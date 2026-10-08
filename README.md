@@ -64,7 +64,7 @@ npm run lint
 npm run build
 ```
 
-Las 24 pruebas cubren fórmulas conocidas, fechas irregulares, datos inválidos, selección de variantes, flujo POST/GET, repetición sin duplicados, fallos de fuente, paginación de más de 1000 registros, errores de persistencia, indicadores económicos y compatibilidad de la API. Las pruebas usan memoria o dobles de servicios y no escriben en una base real.
+Las 25 pruebas cubren fórmulas conocidas, fechas irregulares, datos inválidos, selección de variantes, flujo POST/GET, repetición sin duplicados, fallos de fuente, paginación de más de 1000 registros, errores de persistencia, indicadores económicos y compatibilidad de la API. Las pruebas usan memoria o dobles de servicios y no escriben en una base real.
 
 ## Despliegue
 

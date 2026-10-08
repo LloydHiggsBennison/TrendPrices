@@ -1,5 +1,5 @@
-const normalizeDate = require('./normalizeDate');
-const SOURCE = 'Knasta:v2';
+const normalizeDate = require("./normalizeDate");
+const SOURCE = "Knasta:v2";
 function cleanHistory(history) {
   const byDate = new Map();
   for (const item of Array.isArray(history) ? history : []) {
@@ -11,6 +11,11 @@ function cleanHistory(history) {
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 function todayInChile() {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Santiago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 }
 module.exports = { cleanHistory, todayInChile, SOURCE };

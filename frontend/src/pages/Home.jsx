@@ -1,19 +1,19 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import SearchForm from '../components/SearchForm';
-import ProductSummary from '../components/ProductSummary';
-import StoreComparisonTable from '../components/StoreComparisonTable';
-import PriceHistoryChart from '../components/PriceHistoryChart';
-import MathResults from '../components/MathResults';
-import WeekProjection from '../components/WeekProjection';
-import AnalysisNotices from '../components/AnalysisNotices';
-import formatCurrency from '../utils/formatCurrency';
-import MatrixTable from '../components/MatrixTable';
-import RecommendationCard from '../components/RecommendationCard';
-import LoadingSpinner from '../components/LoadingSpinner';
-import ErrorMessage from '../components/ErrorMessage';
-import { runAnalysis, searchProducts } from '../services/api';
-import { LineChart, Shield, Calculator, Cpu } from 'lucide-react';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import SearchForm from "../components/SearchForm";
+import ProductSummary from "../components/ProductSummary";
+import StoreComparisonTable from "../components/StoreComparisonTable";
+import PriceHistoryChart from "../components/PriceHistoryChart";
+import MathResults from "../components/MathResults";
+import WeekProjection from "../components/WeekProjection";
+import AnalysisNotices from "../components/AnalysisNotices";
+import formatCurrency from "../utils/formatCurrency";
+import MatrixTable from "../components/MatrixTable";
+import RecommendationCard from "../components/RecommendationCard";
+import LoadingSpinner from "../components/LoadingSpinner";
+import ErrorMessage from "../components/ErrorMessage";
+import { runAnalysis, searchProducts } from "../services/api";
+import { LineChart, Shield, Calculator, Cpu } from "lucide-react";
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
@@ -21,7 +21,7 @@ export default function Home() {
   const [analysisData, setAnalysisData] = useState(null);
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
 
   const handleSearch = async (query) => {
     setProducts([]);
@@ -32,10 +32,13 @@ export default function Home() {
     try {
       const data = await searchProducts(query);
       setProducts(data.products || []);
-      if (!data.products?.length) setError("No se encontraron productos con precios válidos.");
+      if (!data.products?.length)
+        setError("No se encontraron productos con precios válidos.");
     } catch (err) {
       console.error(err);
-      setError(err.message || 'No se pudo completar el análisis en este momento.');
+      setError(
+        err.message || "No se pudo completar el análisis en este momento.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -44,9 +47,14 @@ export default function Home() {
   const handleSelect = async (product) => {
     setIsLoading(true);
     setError(null);
-    try { setAnalysisData(await runAnalysis(searchQuery, product.knastaUrl)); setProducts([]); }
-    catch (err) { setError(err.message); }
-    finally { setIsLoading(false); }
+    try {
+      setAnalysisData(await runAnalysis(searchQuery, product.knastaUrl));
+      setProducts([]);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -61,7 +69,8 @@ export default function Home() {
           TrendPrices
         </h1>
         <p className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed">
-          Análisis matemático de tendencias de precios basado en <span className="text-indigo-400 font-semibold">Knasta.cl</span>
+          Análisis matemático de tendencias de precios basado en{" "}
+          <span className="text-indigo-400 font-semibold">Knasta.cl</span>
         </p>
       </header>
 
@@ -80,14 +89,33 @@ export default function Home() {
 
       {products.length > 0 && !analysisData && (
         <section className="mb-8">
-          <h2 className="text-2xl font-bold mb-2 text-slate-100">Selecciona el producto exacto</h2>
-          <p className="text-sm text-slate-400 mb-4">Revisa modelo, capacidad, color y condición. Solo se comparan publicaciones con el mismo nombre completo.</p>
+          <h2 className="text-2xl font-bold mb-2 text-slate-100">
+            Selecciona el producto exacto
+          </h2>
+          <p className="text-sm text-slate-400 mb-4">
+            Revisa modelo, capacidad, color y condición. Solo se comparan
+            publicaciones con el mismo nombre completo.
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {products.map(product => <button key={product.id} disabled={isLoading} onClick={() => handleSelect(product)} className="glass-card p-4 rounded-xl text-left hover:border-indigo-500 disabled:opacity-50">
-              <span className="block font-semibold text-slate-100">{product.name}</span>
-              <span className="block text-sm text-slate-400 mt-2">{product.retailLabel || product.retail} · {formatCurrency(product.currentPrice)}</span>
-              <span className="block text-xs text-indigo-300 mt-2">Analizar este producto</span>
-            </button>)}
+            {products.map((product) => (
+              <button
+                key={product.id}
+                disabled={isLoading}
+                onClick={() => handleSelect(product)}
+                className="glass-card p-4 rounded-xl text-left hover:border-indigo-500 disabled:opacity-50"
+              >
+                <span className="block font-semibold text-slate-100">
+                  {product.name}
+                </span>
+                <span className="block text-sm text-slate-400 mt-2">
+                  {product.retailLabel || product.retail} ·{" "}
+                  {formatCurrency(product.currentPrice)}
+                </span>
+                <span className="block text-xs text-indigo-300 mt-2">
+                  Analizar este producto
+                </span>
+              </button>
+            ))}
           </div>
         </section>
       )}
@@ -97,17 +125,23 @@ export default function Home() {
         <div className="space-y-6 animate-[fadeIn_0.5s_ease-out]">
           <AnalysisNotices data={analysisData} />
           <RecommendationCard recommendation={analysisData.recommendation} />
-          
+
           <ProductSummary product={analysisData.product} />
-          
+
           <div className="space-y-6">
             <StoreComparisonTable stores={analysisData.stores} />
-            <PriceHistoryChart priceHistory={analysisData.priceHistory} mathResults={analysisData.mathResults} />
+            <PriceHistoryChart
+              priceHistory={analysisData.priceHistory}
+              mathResults={analysisData.mathResults}
+            />
           </div>
 
           <MathResults mathResults={analysisData.mathResults} />
-          <WeekProjection mathResults={analysisData.mathResults} externalFactors={analysisData.externalFactors} />
-          
+          <WeekProjection
+            mathResults={analysisData.mathResults}
+            externalFactors={analysisData.externalFactors}
+          />
+
           <MatrixTable comparisonMatrix={analysisData.comparisonMatrix} />
 
           <div className="text-center pt-8 border-t border-slate-800">
@@ -115,7 +149,11 @@ export default function Home() {
               onClick={() => navigate(`/analysis/${analysisData.product.id}`)}
               className="px-6 py-3 bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 border border-indigo-500/20 hover:border-indigo-500/30 rounded-xl font-bold transition-all text-sm"
             >
-              Ver Enlace {analysisData.persistence === 'memory' ? 'Temporal' : 'Permanente'} de Análisis
+              Ver Enlace{" "}
+              {analysisData.persistence === "memory"
+                ? "Temporal"
+                : "Permanente"}{" "}
+              de Análisis
             </button>
           </div>
         </div>
@@ -128,9 +166,13 @@ export default function Home() {
             <div className="inline-flex items-center justify-center p-3 bg-indigo-500/10 text-indigo-400 rounded-xl mb-4">
               <Calculator size={24} />
             </div>
-            <h3 className="text-lg font-bold text-slate-200 mb-2">Modelado P(t)</h3>
+            <h3 className="text-lg font-bold text-slate-200 mb-2">
+              Modelado P(t)
+            </h3>
             <p className="text-sm text-slate-400 leading-relaxed">
-              Representamos el precio histórico de los retailers como funciones de tiempo continuas estimadas mediante regresión por mínimos cuadrados.
+              Representamos el precio histórico de los retailers como funciones
+              de tiempo continuas estimadas mediante regresión por mínimos
+              cuadrados.
             </p>
           </div>
 
@@ -138,9 +180,12 @@ export default function Home() {
             <div className="inline-flex items-center justify-center p-3 bg-purple-500/10 text-purple-400 rounded-xl mb-4">
               <LineChart size={24} />
             </div>
-            <h3 className="text-lg font-bold text-slate-200 mb-2">Tasa de Variación (Derivadas)</h3>
+            <h3 className="text-lg font-bold text-slate-200 mb-2">
+              Tasa de Variación (Derivadas)
+            </h3>
             <p className="text-sm text-slate-400 leading-relaxed">
-              Calculamos tasas de variación medias P'(t) para detectar si el precio está subiendo, bajando o estabilizándose.
+              Calculamos tasas de variación medias P'(t) para detectar si el
+              precio está subiendo, bajando o estabilizándose.
             </p>
           </div>
 
@@ -148,9 +193,12 @@ export default function Home() {
             <div className="inline-flex items-center justify-center p-3 bg-pink-500/10 text-pink-400 rounded-xl mb-4">
               <Shield size={24} />
             </div>
-            <h3 className="text-lg font-bold text-slate-200 mb-2">Historial y Proyección</h3>
+            <h3 className="text-lg font-bold text-slate-200 mb-2">
+              Historial y Proyección
+            </h3>
             <p className="text-sm text-slate-400 leading-relaxed">
-              Estimamos la tendencia mediante regresión lineal y mostramos el mínimo observado, sin asumir un precio futuro garantizado.
+              Estimamos la tendencia mediante regresión lineal y mostramos el
+              mínimo observado, sin asumir un precio futuro garantizado.
             </p>
           </div>
         </section>

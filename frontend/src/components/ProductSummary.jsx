@@ -1,4 +1,4 @@
-import { Tag, Bookmark, Layers, HardDrive } from 'lucide-react';
+import { Tag, Bookmark, Layers, HardDrive } from "lucide-react";
 
 export default function ProductSummary({ product }) {
   if (!product) return null;
@@ -14,8 +14,13 @@ export default function ProductSummary({ product }) {
             <Bookmark size={20} />
           </div>
           <div className="min-w-0">
-            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Producto</p>
-            <p className="text-base font-semibold text-slate-200 break-words" title={product.nombre}>
+            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">
+              Producto
+            </p>
+            <p
+              className="text-base font-semibold text-slate-200 break-words"
+              title={product.nombre}
+            >
               {product.nombre}
             </p>
           </div>
@@ -26,9 +31,11 @@ export default function ProductSummary({ product }) {
             <Tag size={20} />
           </div>
           <div className="min-w-0">
-            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Marca</p>
+            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">
+              Marca
+            </p>
             <p className="text-base font-semibold text-slate-200">
-              {product.marca || 'No informada'}
+              {product.marca || "No informada"}
             </p>
           </div>
         </div>
@@ -38,9 +45,11 @@ export default function ProductSummary({ product }) {
             <Layers size={20} />
           </div>
           <div className="min-w-0">
-            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Categoría</p>
+            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">
+              Categoría
+            </p>
             <p className="text-base font-semibold text-slate-200">
-              {product.categoria || 'No informada'}
+              {product.categoria || "No informada"}
             </p>
           </div>
         </div>
@@ -50,10 +59,10 @@ export default function ProductSummary({ product }) {
             <HardDrive size={20} />
           </div>
           <div className="min-w-0">
-            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Fuente Principal</p>
-            <p className="text-base font-semibold text-slate-200">
-              Knasta.cl
+            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">
+              Fuente Principal
             </p>
+            <p className="text-base font-semibold text-slate-200">Knasta.cl</p>
           </div>
         </div>
       </div>
