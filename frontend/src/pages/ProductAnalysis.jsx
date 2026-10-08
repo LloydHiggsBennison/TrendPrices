@@ -1,3 +1,4 @@
+import CyberBanner from "../components/CyberBanner";
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import ProductSummary from "../components/ProductSummary";
@@ -63,6 +64,7 @@ export default function ProductAnalysis() {
         </button>
       </div>
 
+      <CyberBanner />
       {/* Estados de Carga y Error */}
       {isLoading && <LoadingSpinner message="Cargando Análisis Histórico..." />}
 

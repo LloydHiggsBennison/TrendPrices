@@ -1,64 +1,79 @@
-/**
- * Servicio de Eventos de Retail
- * -----------------------------
- * Mantiene un calendario de eventos comerciales recurrentes en Chile que históricamente
- * generan caídas de precio anómalas (fuera de la tendencia normal). El motor de proyección
- * usa esto para anticipar bajadas de precio que la sola regresión lineal no vería venir.
- *
- * Las fechas son aproximadas/recurrentes: para eventos con fecha variable (CyberDay, CyberMonday)
- * se usa una ventana histórica típica. Para eventos fijos (Navidad, Fiestas Patrias) se usa la fecha exacta.
- * impactoPromedio es el porcentaje de descuento adicional típico observado en retail chileno durante el evento.
- */
-
+// Confirmed calendar, not a recurring guess. End is exclusive, in Chile's UTC-3 offset.
 const EVENTS = [
-  { nombre: 'CyberDay', mes: 6, diaInicio: 2, diaFin: 4, impactoPromedio: -0.12 },
-  { nombre: 'Fiestas Patrias', mes: 9, diaInicio: 16, diaFin: 19, impactoPromedio: -0.05 },
-  { nombre: 'CyberMonday', mes: 11, diaInicio: 3, diaFin: 4, impactoPromedio: -0.10 },
-  { nombre: 'Black Friday', mes: 11, diaInicio: 24, diaFin: 30, impactoPromedio: -0.15 },
-  { nombre: 'CyberDay (edición fin de año)', mes: 10, diaInicio: 6, diaFin: 8, impactoPromedio: -0.10 },
-  { nombre: 'Navidad', mes: 12, diaInicio: 20, diaFin: 25, impactoPromedio: -0.08 },
-  { nombre: 'Año Nuevo / Liquidaciones de Verano', mes: 1, diaInicio: 1, diaFin: 10, impactoPromedio: -0.06 }
+  {
+    id: "cybermonday-2026",
+    nombre: "CyberMonday 2026",
+    startDate: "2026-10-05",
+    endDate: "2026-10-07",
+    startsAt: "2026-10-05T00:00:00-03:00",
+    endsAt: "2026-10-08T00:00:00-03:00",
+    timeZone: "America/Santiago",
+    sourceUrl: "https://www.ccs.cl/ecommerce/cybermonday-2026/",
+    endLabel: "7 de octubre de 2026 a las 23:59 (hora de Chile)",
+  },
 ];
-
-/**
- * Revisa si una fecha específica cae dentro de alguna ventana de evento (para cualquier año).
- * @param {Date} date
- * @returns {Object|null} Evento aplicable o null
- */
+function getCyberContext(now = new Date()) {
+  const time = new Date(now).getTime();
+  if (!Number.isFinite(time)) return null;
+  const event = EVENTS.find(
+    (e) =>
+      time >= Date.parse(e.startsAt) - 7 * 86400000 &&
+      time < Date.parse(e.endsAt) + 7 * 86400000,
+  );
+  if (!event) return null;
+  return {
+    ...event,
+    status:
+      time < Date.parse(event.startsAt)
+        ? "upcoming"
+        : time < Date.parse(event.endsAt)
+          ? "active"
+          : "ended",
+    checkedAt: new Date(time).toISOString(),
+  };
+}
 function getEventForDate(date) {
-  const mes = date.getMonth() + 1;
-  const dia = date.getDate();
-
-  const match = EVENTS.find(ev => ev.mes === mes && dia >= ev.diaInicio && dia <= ev.diaFin);
-  return match || null;
+  return (
+    EVENTS.find(
+      (e) =>
+        new Date(date).getTime() >= Date.parse(e.startsAt) &&
+        new Date(date).getTime() < Date.parse(e.endsAt),
+    ) || null
+  );
 }
-
-/**
- * Devuelve todos los eventos que caen dentro de un rango de N días desde una fecha base.
- * Útil para mostrarle al usuario "hay un CyberDay en 3 días, quizás conviene esperar".
- * @param {Date} baseDate
- * @param {number} daysAhead
- * @returns {Array<{nombre: string, fecha: string, impactoPromedio: number, diasRestantes: number}>}
- */
-function getUpcomingEvents(baseDate, daysAhead = 7) {
-  const upcoming = [];
-  for (let i = 0; i <= daysAhead; i++) {
-    const d = new Date(baseDate);
-    d.setDate(baseDate.getDate() + i);
-    const ev = getEventForDate(d);
-    if (ev) {
-      upcoming.push({
-        nombre: ev.nombre,
-        fecha: d.toISOString().split('T')[0],
-        impactoPromedio: ev.impactoPromedio,
-        diasRestantes: i
-      });
-    }
-  }
-  return upcoming;
+function getUpcomingEvents(date = new Date(), daysAhead = 7) {
+  const time = new Date(date).getTime();
+  return EVENTS.filter(
+    (e) =>
+      Date.parse(e.startsAt) > time &&
+      Date.parse(e.startsAt) <= time + daysAhead * 86400000,
+  );
 }
-
+function compareEventPrice(history, event) {
+  if (!event || !history.length) return null;
+  const current = history.at(-1);
+  if (current.date < event.startDate) return null;
+  const cutoff = Date.parse(event.startDate) - 30 * 86400000;
+  const baseline = history
+    .filter((h) => h.date < event.startDate && Date.parse(h.date) >= cutoff)
+    .at(-1);
+  if (!baseline) return { status: "insufficient", eventName: event.nombre };
+  const reductionPercent =
+    ((baseline.price - current.price) / baseline.price) * 100;
+  return {
+    status:
+      reductionPercent > 0 ? "lower" : reductionPercent < 0 ? "higher" : "same",
+    eventName: event.nombre,
+    baselineDate: baseline.date,
+    baselinePrice: baseline.price,
+    currentDate: current.date,
+    currentPrice: current.price,
+    reductionPercent,
+  };
+}
 module.exports = {
+  getCyberContext,
+  compareEventPrice,
   getEventForDate,
-  getUpcomingEvents
+  getUpcomingEvents,
 };

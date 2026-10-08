@@ -1,3 +1,4 @@
+import CyberBanner from "../components/CyberBanner";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SearchForm from "../components/SearchForm";
@@ -74,6 +75,7 @@ export default function Home() {
         </p>
       </header>
 
+      <CyberBanner />
       {/* Input de Búsqueda */}
       <div className="mb-16">
         <SearchForm onSearch={handleSearch} isLoading={isLoading} />

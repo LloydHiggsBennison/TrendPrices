@@ -56,3 +56,7 @@ export async function runAnalysis(query, productUrl) {
     }),
   );
 }
+
+export function getRetailEvent() {
+  return request("/events");
+}

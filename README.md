@@ -64,7 +64,7 @@ npm run lint
 npm run build
 ```
 
-Las 25 pruebas cubren fórmulas conocidas, fechas irregulares, datos inválidos, selección de variantes, flujo POST/GET, repetición sin duplicados, fallos de fuente, paginación de más de 1000 registros, errores de persistencia, indicadores económicos y compatibilidad de la API. Las pruebas usan memoria o dobles de servicios y no escriben en una base real.
+Las 29 pruebas cubren fórmulas conocidas, fechas irregulares, datos inválidos, selección de variantes, flujo POST/GET, repetición sin duplicados, fallos de fuente, paginación de más de 1000 registros, errores de persistencia, indicadores económicos y compatibilidad de la API. Las pruebas usan memoria o dobles de servicios y no escriben en una base real.
 
 ## Despliegue
 
@@ -76,3 +76,5 @@ Frontend y backend deben actualizarse conjuntamente. `POST /api/analysis/run` re
 - Después de desplegar: probar búsqueda, selección, resultado, actualización y recarga directa del enlace; confirmar que `persistence` sea `supabase` y que el historial permanezca después de reiniciar el backend.
 
 La verificación local con datos reales incluyó iPhone 15, Adidas Samba y PlayStation 5. Todos los precios retornados coincidieron con Knasta, y pendiente, promedio, mínimos y resultados POST/GET se comprobaron independientemente. La interfaz se revisó en escritorio y móvil de 390 × 844.
+
+Calendario Cyber: la CCS confirmó CyberMonday 2026 del 5 al 7 de octubre, hasta las 23:59 hora de Chile. Se muestra el estado vigente/próximo/finalizado y la fecha oficial de cierre. Las extensiones por tienda requieren comprobar sus condiciones. La rebaja se mide contra el último precio observado dentro de los 30 días anteriores al evento; no se inventan descuentos. Durante un Cyber activo, una rebaja observada cerca del mínimo histórico se destaca como oportunidad y no recibe una segunda reducción artificial. Fuente: https://www.ccs.cl/ecommerce/cybermonday-2026/ .

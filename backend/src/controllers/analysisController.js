@@ -4,6 +4,7 @@ const math = require("../services/mathService");
 const forecast = require("../services/forecastService");
 const external = require("../services/externalFactorsService");
 const recommendations = require("../services/recommendationService");
+const retailEvents = require("../services/retailEventsService");
 const normalizeDate = require("../utils/normalizeDate");
 const { cleanHistory, SOURCE, todayInChile } = require("../utils/cleanHistory");
 function normalizeText(text) {
@@ -48,6 +49,10 @@ function buildStore(store, history) {
     projectionMethod: week.method,
     projectionWarning: week.warning || null,
     insufficientHistory: clean.length < 3 || linear.spanDays < 7,
+    eventPriceComparison: retailEvents.compareEventPrice(
+      clean,
+      retailEvents.getCyberContext(),
+    ),
     stale: current.date < todayInChile(),
   };
 }
@@ -69,7 +74,10 @@ async function buildResponse(product, history, warnings = []) {
     .map((g) => buildStore(g.store, g.history))
     .filter(Boolean);
   if (!stores.length) return null;
-  const recommendation = recommendations.generateRecommendation(stores);
+  const recommendation = recommendations.generateRecommendation(
+    stores,
+    retailEvents.getCyberContext(),
+  );
   const indicators = await external.getExternalIndicators();
   return {
     product,
@@ -93,6 +101,7 @@ async function buildResponse(product, history, warnings = []) {
     warnings,
     persistence: db.isSupabaseConfigured() ? "supabase" : "memory",
     analysisVersion: 2,
+    retailEvent: retailEvents.getCyberContext(),
   };
 }
 async function getAnalysis(req, res) {

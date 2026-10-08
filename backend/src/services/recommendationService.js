@@ -69,7 +69,7 @@ function calculateStoreScore(storeAnalysis, isCheapestStore = false) {
  * @param {Array} upcomingEvents Eventos de retail (CyberDay, Black Friday, etc.) dentro de los próximos 7 días
  * @returns {Object} { decision, descripcion, puntaje_final, tienda_recomendada }
  */
-function generateRecommendation(storesAnalysis) {
+function generateRecommendation(storesAnalysis, retailEvent = null) {
   if (!Array.isArray(storesAnalysis) || storesAnalysis.length === 0) {
     return {
       decision: "Esperar",
@@ -128,6 +128,13 @@ function generateRecommendation(storesAnalysis) {
     decision = "Datos insuficientes";
     descripcion =
       "El precio observado se muestra como referencia. Se requieren al menos tres fechas válidas y siete días de historial para proyectar o recomendar una compra.";
+  } else if (
+    retailEvent?.status === "active" &&
+    recommendedStore.eventPriceComparison?.status === "lower" &&
+    currentPrice <= minPrice * 1.02
+  ) {
+    decision = "Comprar ahora";
+    descripcion = `El precio publicado en ${storeName} ya es ${recommendedStore.eventPriceComparison.reductionPercent.toFixed(1)}% menor que la última observación anterior al Cyber y está cerca del mínimo histórico observado. Es una oportunidad según los precios reales disponibles.`;
   } else if (usableForecast && minimumProjected < currentPrice * 0.98) {
     decision = "Esperar";
     descripcion = `El ajuste histórico estima un precio de hasta $${minimumProjected.toLocaleString("es-CL")} en los próximos siete días desde la última observación. Podría convenir esperar, aunque la extrapolación no garantiza esa bajada.`;
@@ -143,6 +150,10 @@ function generateRecommendation(storesAnalysis) {
   } else {
     decision = "Sin señal clara";
     descripcion = `El precio publicado en ${storeName} es $${currentPrice.toLocaleString("es-CL")}. Los indicadores no ofrecen una señal suficiente para recomendar comprar o esperar. Revisa el historial, el R² y las condiciones de la tienda.`;
+  }
+
+  if (retailEvent?.status === "active") {
+    descripcion += ` ${retailEvent.nombre} ya está en curso y finaliza el ${retailEvent.endLabel}. Las proyecciones no garantizan que el descuento siga vigente después del evento; confirma stock y condiciones en la tienda.`;
   }
 
   return {

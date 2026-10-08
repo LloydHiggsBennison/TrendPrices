@@ -1,3 +1,5 @@
+import formatCurrency from "../utils/formatCurrency";
+import formatDate from "../utils/formatDate";
 export default function AnalysisNotices({ data }) {
   return (
     <div className="space-y-2 text-sm text-amber-300" role="status">
@@ -6,6 +8,34 @@ export default function AnalysisNotices({ data }) {
         Precios publicados por Knasta. Revisa en la tienda las condiciones de
         tarjeta, despacho y disponibilidad.
       </p>
+      {data.stores?.map((store) => {
+        const comparison = store.eventPriceComparison;
+        if (!comparison) return null;
+        return (
+          <p
+            key={store.storeId}
+            className="p-3 rounded-xl bg-indigo-500/10 text-slate-200"
+          >
+            <strong>{store.storeName}: </strong>
+            {comparison.status === "insufficient" ? (
+              "No hay un precio observado en los 30 días previos al Cyber para verificar una rebaja."
+            ) : (
+              <>
+                {comparison.status === "lower"
+                  ? `Precio observado ${comparison.reductionPercent.toFixed(1)}% menor`
+                  : comparison.status === "higher"
+                    ? `Precio observado ${Math.abs(comparison.reductionPercent).toFixed(1)}% mayor`
+                    : "Precio observado sin cambio"}{" "}
+                frente a {formatCurrency(comparison.baselinePrice)} del{" "}
+                {formatDate(comparison.baselineDate)}, antes del Cyber. Precio
+                comparado del {formatDate(comparison.currentDate)}.
+                {comparison.status === "lower" &&
+                  " La rebaja ya está reflejada en el precio publicado; confirma su vigencia y condiciones en la tienda."}
+              </>
+            )}
+          </p>
+        );
+      })}
       {data.persistence === "memory" && (
         <p className="p-3 rounded-xl bg-amber-500/10">
           Almacenamiento temporal: el enlace de análisis puede dejar de
