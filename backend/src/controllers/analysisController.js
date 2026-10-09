@@ -1,440 +1,286 @@
-const knastaService = require('../services/knastaService');
-const supabaseService = require('../services/supabaseService');
-const mathService = require('../services/mathService');
-const forecastService = require('../services/forecastService');
-const externalFactorsService = require('../services/externalFactorsService');
-const retailEventsService = require('../services/retailEventsService');
-const recommendationService = require('../services/recommendationService');
-const normalizePrice = require('../utils/normalizePrice');
-const normalizeDate = require('../utils/normalizeDate');
-
-/**
- * Genera un historial de precios ficticio y realista en caso de fallo de red/scraping.
- * Garantiza que el backend siempre pueda realizar los cálculos matemáticos.
- */
-function generateFallbackHistory(currentPrice, storeName, days = 30) {
-  const history = [];
-  const baseDate = new Date();
-  
-  // Generar precios fluctuantes con una ligera tendencia a la baja o al alza
-  let tempPrice = currentPrice * 1.05; // Empezar un poco más alto
-  const step = currentPrice * 0.005; // 0.5% de variación diaria promedio
-  
-  for (let i = days; i >= 0; i--) {
-    const date = new Date(baseDate);
-    date.setDate(baseDate.getDate() - i);
-    
-    // Variación aleatoria controlada
-    const change = (Math.random() - 0.55) * step; // Sesgo negativo (tendencia general a la baja)
-    tempPrice += change;
-    
-    // Asegurar que el último precio sea exactamente el actual
-    const finalPrice = i === 0 ? currentPrice : Math.round(tempPrice);
-    
-    history.push({
-      price: finalPrice,
-      normalPrice: Math.round(finalPrice * 1.15),
-      discount: 15,
-      available: true,
-      date: date.toISOString().split('T')[0]
-    });
-  }
-  return history;
-}
-
-/**
- * Normaliza un texto para comparaciones exactas (sin tildes, minúsculas, sin espacios extra).
- */
+const knasta = require("../services/knastaService");
+const db = require("../services/supabaseService");
+const math = require("../services/mathService");
+const forecast = require("../services/forecastService");
+const external = require("../services/externalFactorsService");
+const recommendations = require("../services/recommendationService");
+const retailEvents = require("../services/retailEventsService");
+const normalizeDate = require("../utils/normalizeDate");
+const { cleanHistory, SOURCE, todayInChile } = require("../utils/cleanHistory");
 function normalizeText(text) {
-  return (text || '')
-    .toString()
+  return String(text || "")
     .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ')
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
-
-/**
- * Calcula un puntaje de concordancia heurística para evitar traer accesorios
- * (como volantes, mandos, fundas) cuando el usuario busca la consola, y viceversa.
- */
-function getQueryMatchScore(title, query) {
-  const cleanTitle = title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const cleanQuery = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  
-  const queryWords = cleanQuery.split(/\s+/).filter(w => w.length > 2);
-  let matchCount = 0;
-  
-  // Contar palabras coincidentes
-  queryWords.forEach(word => {
-    if (cleanTitle.includes(word)) {
-      matchCount++;
-    }
-  });
-  
-  // Penalizar accesorios si no se mencionan en la consulta
-  const accessories = ['volante', 'mando', 'control', 'soporte', 'funda', 'carcasa', 'cable', 'juego', 'audifonos', 'headset', 'charger', 'cargador', 'mochila', 'bolso', 'skin', 'sticker'];
-  
-  let hasAccessoryInTitle = false;
-  let hasAccessoryInQuery = false;
-  
-  accessories.forEach(acc => {
-    if (cleanTitle.includes(acc)) hasAccessoryInTitle = true;
-    if (cleanQuery.includes(acc)) hasAccessoryInQuery = true;
-  });
-  
-  if (hasAccessoryInTitle && !hasAccessoryInQuery) {
-    matchCount -= 5; // Fuerte penalización
-  }
-  
-  return matchCount;
+function buildStore(store, history) {
+  const clean = cleanHistory(history);
+  if (!clean.length) return null;
+  const current = clean.at(-1);
+  const linear = math.estimateLinearFunction(clean);
+  const derivative = math.getDerivativeDetails(clean);
+  const week = forecast.project7Days(clean);
+  return {
+    storeId: store.id,
+    storeName: store.nombre,
+    storeUrl: store.url_tienda || "",
+    currentPrice: current.price,
+    normalPrice: current.normalPrice || current.price,
+    currentDate: current.date,
+    available: current.available !== false,
+    discount: current.discount || 0,
+    minPrice: Math.min(...clean.map((h) => h.price)),
+    maxPrice: Math.max(...clean.map((h) => h.price)),
+    linearFunction: linear.functionText,
+    regression: linear,
+    m: linear.m,
+    b: linear.b,
+    derivative: derivative.value,
+    derivativeStartDate: derivative.startDate,
+    derivativeEndDate: derivative.endDate,
+    averagePrice: math.calculateAveragePrice(clean),
+    limitEstimated: math.calculateEstimatedLimit(clean),
+    projectedPrice: week.days[0]?.projectedPrice ?? null,
+    weekProjection: week.days,
+    projectionConfidence: week.confidence,
+    projectionBaseDate: week.baseDate,
+    projectionMethod: week.method,
+    projectionWarning: week.warning || null,
+    insufficientHistory: clean.length < 3 || linear.spanDays < 7,
+    eventPriceComparison: retailEvents.compareEventPrice(
+      clean,
+      retailEvents.getCyberContext(),
+    ),
+    stale: current.date < todayInChile(),
+  };
 }
-
-/**
- * Endpoint para obtener un análisis guardado anteriormente
- */
+async function buildResponse(product, history, warnings = []) {
+  const groups = new Map();
+  // Ignore legacy rows: older versions mixed variants and could save fabricated prices.
+  for (const h of history.filter((h) => h.fuente === SOURCE && h.tiendas)) {
+    const key = h.tienda_id;
+    if (!groups.has(key)) groups.set(key, { store: h.tiendas, history: [] });
+    groups.get(key).history.push({
+      price: h.precio_actual,
+      normalPrice: h.precio_normal,
+      discount: h.descuento,
+      available: h.disponible,
+      date: h.fecha_registro,
+    });
+  }
+  const stores = [...groups.values()]
+    .map((g) => buildStore(g.store, g.history))
+    .filter(Boolean);
+  if (!stores.length) return null;
+  const recommendation = recommendations.generateRecommendation(
+    stores,
+    retailEvents.getCyberContext(),
+  );
+  const indicators = await external.getExternalIndicators();
+  return {
+    product,
+    stores: recommendation.storesWithScores,
+    priceHistory: history.filter(
+      (h) =>
+        h.fuente === SOURCE &&
+        groups.has(h.tienda_id) &&
+        Number(h.precio_actual) > 0,
+    ),
+    mathResults: stores,
+    comparisonMatrix: math.buildComparisonMatrix(
+      recommendation.storesWithScores,
+    ),
+    recommendation,
+    externalFactors: {
+      ...indicators,
+      upcomingEvents: [],
+      appliedToProjection: false,
+    },
+    warnings,
+    persistence: db.isSupabaseConfigured() ? "supabase" : "memory",
+    analysisVersion: 2,
+    retailEvent: retailEvents.getCyberContext(),
+  };
+}
 async function getAnalysis(req, res) {
   try {
-    const { productId } = req.params;
-    
-    // 1. Obtener producto
-    const product = await supabaseService.getProductById(productId);
-    if (!product) {
-      return res.status(404).json({ error: 'Producto no encontrado.' });
-    }
-
-    // 2. Obtener historial
-    const history = await getHistoryForProduct(productId);
-    
-    // 3. Re-construir análisis matemático y recomendación guardados
-    // En lugar de recalcular, obtenemos lo guardado en BD o lo calculamos al vuelo si falta
-    const storesList = [...new Set(history.map(h => h.tiendas.nombre))];
-    
-    // Agrupar historial por tienda
-    const historyByStore = {};
-    history.forEach(h => {
-      const storeName = h.tiendas.nombre;
-      if (!historyByStore[storeName]) historyByStore[storeName] = [];
-      historyByStore[storeName].push({
-        price: h.precio_actual,
-        normalPrice: h.precio_normal,
-        discount: h.descuento,
-        available: h.disponible,
-        date: h.fecha_registro
+    const product = await db.getProductById(req.params.productId);
+    if (!product)
+      return res.status(404).json({
+        error:
+          "Producto no encontrado. Si el almacenamiento es temporal, vuelve a analizarlo.",
       });
-    });
-
-    const storesAnalysis = [];
-
-    // Variables externas (dólar, IPC) y eventos de retail próximos: se obtienen una sola vez
-    // por request y se reutilizan para todas las tiendas del producto.
-    const externalIndicators = await externalFactorsService.getExternalIndicators();
-    const upcomingEvents = retailEventsService.getUpcomingEvents(new Date(), 7);
-
-    for (const storeName of storesList) {
-      const storeHistory = historyByStore[storeName];
-      const storeDbRecord = history.find(h => h.tiendas.nombre === storeName);
-      
-      const current = storeHistory[storeHistory.length - 1];
-      const prices = storeHistory.map(h => h.price);
-      
-      const linear = mathService.estimateLinearFunction(storeHistory);
-      const derivativeDetails = mathService.getDerivativeDetails(storeHistory);
-      const avgPrice = mathService.calculateAveragePrice(storeHistory);
-      const limit = mathService.calculateEstimatedLimit(storeHistory);
-      const weekProjection = forecastService.project7Days(storeHistory, externalIndicators);
-      const projection = weekProjection.days[0]?.projectedPrice ?? mathService.calculateTangentProjection(storeHistory, 1);
-      
-      storesAnalysis.push({
-        storeId: storeDbRecord.tiendas.id,
-        storeName: storeName,
-        currentPrice: current.price,
-        minPrice: Math.min(...prices),
-        maxPrice: Math.max(...prices),
-        discount: current.discount,
-        available: current.available,
-        derivative: derivativeDetails.value,
-        derivativeStartDate: derivativeDetails.startDate,
-        derivativeEndDate: derivativeDetails.endDate,
-        averagePrice: avgPrice,
-        limitEstimated: limit,
-        projectedPrice: projection,
-        weekProjection: weekProjection.days,
-        projectionConfidence: weekProjection.confidence,
-        linearFunction: linear.functionText,
-        storeUrl: storeDbRecord.tiendas.url_tienda || ''
-      });
-    }
-
-    const recommendation = recommendationService.generateRecommendation(storesAnalysis, upcomingEvents);
-    const comparisonMatrix = mathService.buildComparisonMatrix(recommendation.storesWithScores);
-
-    return res.json({
+    const response = await buildResponse(
       product,
-      stores: recommendation.storesWithScores,
-      priceHistory: history,
-      mathResults: storesAnalysis.map(sa => ({
-        storeName: sa.storeName,
-        currentPrice: sa.currentPrice,
-        linearFunction: sa.linearFunction,
-        derivative: sa.derivative,
-        derivativeStartDate: sa.derivativeStartDate,
-        derivativeEndDate: sa.derivativeEndDate,
-        averagePrice: sa.averagePrice,
-        limitEstimated: sa.limitEstimated,
-        projectedPrice: sa.projectedPrice,
-        weekProjection: sa.weekProjection,
-        projectionConfidence: sa.projectionConfidence
-      })),
-      comparisonMatrix,
-      recommendation,
-      externalFactors: {
-        dolar: externalIndicators.dolar,
-        ipc: externalIndicators.ipc,
-        isFallback: externalIndicators.isFallback,
-        upcomingEvents
-      }
-    });
+      await db.getProductHistory(product.id),
+    );
+    if (!response)
+      return res.status(404).json({
+        error:
+          "Este análisis no tiene historial validado. Busca y analiza el producto nuevamente.",
+      });
+    return res.json(response);
   } catch (error) {
-    console.error('AnalysisController: Error al obtener análisis:', error.message);
-    return res.status(500).json({ error: 'Error al obtener el análisis del producto.' });
+    console.error("getAnalysis:", error.message);
+    return res.status(503).json({
+      error: "No se pudo recuperar el análisis guardado. Inténtalo nuevamente.",
+    });
   }
 }
-
-/**
- * Helper para obtener historial ordenado por tienda y fecha
- */
-async function getHistoryForProduct(productId) {
-  const history = await supabaseService.getProductHistory(productId);
-  return history;
-}
-
-/**
- * Ejecuta el flujo completo de análisis
- */
 async function runAnalysis(req, res) {
   try {
-    const { query } = req.body;
-    if (!query) {
-      return res.status(400).json({ error: 'El parámetro "query" es requerido en el body.' });
-    }
-
-    console.log(`AnalysisController: Ejecutando análisis para "${query}"`);
-
-    // 1. Buscar en Knasta
-    const products = await knastaService.searchProduct(query);
-    if (!products || products.length === 0) {
-      return res.status(404).json({ error: `No se encontraron productos en Knasta para "${query}".` });
-    }
-
-    // Calcular score de relevancia y ordenar los productos de mayor a menor coincidencia
-    const normalizedQuery = normalizeText(query);
-    const scoredProducts = products.map(p => ({
-      product: p,
-      score: getQueryMatchScore(p.name, query),
-      isExactMatch: normalizeText(p.name) === normalizedQuery
-    }));
-
-    // Ordenar por relevancia descendente, priorizando siempre coincidencias exactas con Knasta
-    scoredProducts.sort((a, b) => {
-      if (a.isExactMatch !== b.isExactMatch) return a.isExactMatch ? -1 : 1;
-      return b.score - a.score;
-    });
-
-    // Nos quedamos únicamente con productos que realmente concuerdan con lo que Knasta
-    // devolvió para la búsqueda (score > 0), evitando arrastrar resultados sin relación
-    // (p. ej. accesorios cuando se busca la consola). Esto asegura que lo mostrado en la
-    // app sea exactamente lo que Knasta indica para esa búsqueda, no una aproximación.
-    const relevantProducts = scoredProducts.filter(sp => sp.isExactMatch || sp.score > 0);
-    const sortedProducts = (relevantProducts.length > 0 ? relevantProducts : scoredProducts)
-      .map(sp => sp.product);
-
-    // Agrupar por tienda y tomar los mejores resultados
-    // Tomamos los 5 primeros resultados de diferentes tiendas si es posible (en orden de relevancia)
-    const selectedProducts = [];
-    const seenRetails = new Set();
-    
-    for (const p of sortedProducts) {
-      if (!seenRetails.has(p.retail) && selectedProducts.length < 5) {
-        selectedProducts.push(p);
-        seenRetails.add(p.retail);
-      }
-    }
-    
-    // Si no pudimos diversificar tiendas, tomamos los primeros 5 de la lista ordenada por relevancia
-    if (selectedProducts.length === 0) {
-      selectedProducts.push(...sortedProducts.slice(0, 5));
-    }
-
-    // 2. Guardar producto base en Supabase
-    // Usamos el nombre del primer producto para representarlo
-    const primaryProd = selectedProducts[0];
-    const productId = await supabaseService.saveProduct({
-      name: primaryProd.name,
-      brand: primaryProd.brand,
-      category: primaryProd.category,
+    const query =
+      typeof req.body?.query === "string" ? req.body.query.trim() : "";
+    if (!query || query.length > 200)
+      return res
+        .status(400)
+        .json({ error: "Ingresa una búsqueda de entre 1 y 200 caracteres." });
+    const products = await knasta.searchProduct(query);
+    if (!products.length)
+      return res
+        .status(404)
+        .json({ error: "No se encontraron productos con precios válidos." });
+    const selected = products.find((p) => p.knastaUrl === req.body.productUrl);
+    if (!selected)
+      return res.status(400).json({
+        error:
+          "Selecciona un producto de los resultados de búsqueda para evitar mezclar modelos y variantes.",
+      });
+    // Only compare exactly the selected title (including capacity, color and condition).
+    const matches = [
+      selected,
+      ...products.filter(
+        (p) =>
+          p.knastaUrl !== selected.knastaUrl &&
+          normalizeText(p.name) === normalizeText(selected.name),
+      ),
+    ];
+    const seen = new Set();
+    const comparable = matches
+      .filter((p) => {
+        if (seen.has(p.retail)) return false;
+        seen.add(p.retail);
+        return true;
+      })
+      .slice(0, 5);
+    const productId = await db.saveProduct({
+      name: selected.name,
+      brand: selected.brand,
+      category: selected.category,
       searchTerm: query,
-      urlKnasta: primaryProd.knastaUrl,
-      fuente: 'Knasta'
+      urlKnasta: selected.knastaUrl,
+      fuente: SOURCE,
     });
-
-    const storesAnalysis = [];
-
-    // Variables externas (dólar, IPC) y eventos de retail próximos: se obtienen una sola vez
-    // por request y se reutilizan para todas las tiendas del producto.
-    const externalIndicators = await externalFactorsService.getExternalIndicators();
-    const upcomingEvents = retailEventsService.getUpcomingEvents(new Date(), 7);
-    
-    // 3. Para cada tienda seleccionada, obtener historial y guardar en BD
-    for (const p of selectedProducts) {
-      // Guardar Tienda
-      const storeId = await supabaseService.saveStore({
-        name: p.retailLabel || p.retail,
-        storeUrl: p.storeUrl || ''
-      });
-
-      let rawHistory = [];
-      let fetchSuccess = false;
-
-      // Esperar 1.5s antes de hacer la petición de detalle (responsable)
-      await knastaService.delay(1500);
-
+    const warnings = [];
+    for (const p of comparable) {
+      let raw = [];
+      let detail = null;
+      await knasta.delay(1500);
       try {
-        const detailData = await knastaService.getProductDetail(p.knastaUrl);
-        if (detailData && detailData.dprices) {
-          rawHistory = knastaService.normalizeKnastaHistory(detailData.dprices, p.retailLabel || p.retail);
-          fetchSuccess = true;
-        }
-      } catch (err) {
-        console.warn(`AnalysisController: No se pudo obtener historial real de ${p.knastaUrl}. Usando fallback.`);
+        detail = await knasta.getProductDetail(p.knastaUrl);
+        raw = knasta.normalizeKnastaHistory(
+          detail.dprices,
+          p.retailLabel || p.retail,
+        );
+      } catch {
+        warnings.push(
+          `No se pudo obtener el historial de ${p.retailLabel || p.retail}; se conserva el historial validado disponible y el precio fechado de la búsqueda.`,
+        );
       }
-
-      // Si falla la extracción, generamos historial realista
-      if (!fetchSuccess || rawHistory.length === 0) {
-        rawHistory = generateFallbackHistory(p.currentPrice, p.retailLabel || p.retail, 45);
+      if (detail && p.knastaUrl === selected.knastaUrl)
+        await db.saveProduct({
+          name: selected.name,
+          brand: detail.brand || selected.brand,
+          category: detail.category_name || selected.category,
+          searchTerm: query,
+          urlKnasta: selected.knastaUrl,
+          fuente: SOURCE,
+        });
+      const snapshot = detail
+        ? knasta.normalizeKnastaProduct(detail).stores[0]
+        : {
+            currentPrice: p.currentPrice,
+            normalPrice: p.normalPrice,
+            discount: p.discount,
+            available: p.available,
+          };
+      const date = normalizeDate(detail?.current_day) || p.currentDate;
+      // Missing source dates are not assigned today's date.
+      if (date && snapshot.currentPrice > 0)
+        raw.push({
+          date,
+          price: snapshot.currentPrice,
+          normalPrice: snapshot.normalPrice,
+          discount: snapshot.discount,
+          available: snapshot.available,
+          fuente: SOURCE,
+        });
+      raw = cleanHistory(raw)
+        .filter((h) => h.date <= todayInChile())
+        .map((h) => ({ ...h, fuente: SOURCE }));
+      if (!raw.length) {
+        warnings.push(
+          `Knasta no proporcionó observaciones válidas y fechadas para ${p.retailLabel || p.retail}.`,
+        );
+        continue;
       }
-
-      // Guardar historial en Supabase
-      await supabaseService.savePriceHistory(productId, storeId, rawHistory);
-
-      // 4. Ejecutar análisis matemático por tienda
-      const prices = rawHistory.map(h => h.price);
-      const minPrice = Math.min(...prices);
-      const maxPrice = Math.max(...prices);
-      
-      const linear = mathService.estimateLinearFunction(rawHistory);
-      const derivativeDetails = mathService.getDerivativeDetails(rawHistory);
-      const avgPrice = mathService.calculateAveragePrice(rawHistory);
-      const limit = mathService.calculateEstimatedLimit(rawHistory);
-      const weekProjection = forecastService.project7Days(rawHistory, externalIndicators);
-      const projection = weekProjection.days[0]?.projectedPrice ?? mathService.calculateTangentProjection(rawHistory, 1);
-
-      const analysisRecord = {
-        storeId,
-        storeName: p.retailLabel || p.retail,
-        currentPrice: p.currentPrice,
-        minPrice,
-        maxPrice,
-        discount: p.discount,
-        available: true,
-        derivative: derivativeDetails.value,
-        derivativeStartDate: derivativeDetails.startDate,
-        derivativeEndDate: derivativeDetails.endDate,
-        averagePrice: avgPrice,
-        limitEstimated: limit,
-        projectedPrice: projection,
-        weekProjection: weekProjection.days,
-        projectionConfidence: weekProjection.confidence,
-        linearFunction: linear.functionText,
-        m: linear.m,
-        b: linear.b,
-        storeUrl: p.storeUrl || ''
-      };
-      
-      storesAnalysis.push(analysisRecord);
-
-      // Guardar análisis en Supabase
-      await supabaseService.saveMathAnalysis({
-        productId,
-        storeId,
-        funcionPrecio: linear.functionText,
-        pendienteM: linear.m,
-        interceptoB: linear.b,
-        derivadaAproximada: derivativeDetails.value,
-        precioPromedio: avgPrice,
-        limiteEstimado: limit,
-        precioProyectado: projection,
-        proyeccion7d: weekProjection.days,
-        confianzaProyeccion: weekProjection.confidence,
-        factoresExternos: {
-          dolar: externalIndicators.dolar,
-          ipc: externalIndicators.ipc,
-          eventosProximos: upcomingEvents
-        },
-        puntaje: 0, // Se actualizará al ponderar recomendaciones
-        tendencia: derivativeDetails.value < 0 ? 'Baja' : (derivativeDetails.value > 0 ? 'Alza' : 'Estable')
+      const storeId = await db.saveStore({
+        name: p.retailLabel || p.retail,
+        storeUrl: p.storeUrl,
       });
+      await db.savePriceHistory(productId, storeId, raw);
     }
-
-    // 5. Generar recomendación y ponderación de puntajes
-    const recommendation = recommendationService.generateRecommendation(storesAnalysis, upcomingEvents);
-    
-    // Guardar recomendación en Supabase
-    await supabaseService.saveRecommendation({
+    const response = await buildResponse(
+      await db.getProductById(productId),
+      await db.getProductHistory(productId),
+      warnings,
+    );
+    if (!response)
+      return res.status(422).json({
+        error:
+          "No hay historial real y fechado disponible para este producto. No se generaron precios ni recomendaciones ficticias.",
+      });
+    for (const store of response.stores)
+      await db.saveMathAnalysis({
+        productId,
+        storeId: store.storeId,
+        funcionPrecio: store.linearFunction,
+        pendienteM: store.m,
+        interceptoB: store.b,
+        derivadaAproximada: store.derivative,
+        precioPromedio: store.averagePrice,
+        limiteEstimado: store.limitEstimated,
+        precioProyectado: store.projectedPrice,
+        proyeccion7d: store.weekProjection,
+        confianzaProyeccion: store.projectionConfidence,
+        factoresExternos: response.externalFactors,
+        puntaje: store.score,
+        tendencia:
+          store.derivative == null
+            ? "Sin datos"
+            : store.derivative < 0
+              ? "Baja"
+              : store.derivative > 0
+                ? "Alza"
+                : "Estable",
+      });
+    await db.saveRecommendation({
       productId,
-      tiendaRecomendadaId: recommendation.tienda_recomendada?.id || null,
-      decision: recommendation.decision,
-      descripcion: recommendation.descripcion,
-      puntajeFinal: recommendation.puntaje_final
+      tiendaRecomendadaId:
+        response.recommendation.tienda_recomendada?.id || null,
+      decision: response.recommendation.decision,
+      descripcion: response.recommendation.descripcion,
+      puntajeFinal: response.recommendation.puntaje_final,
     });
-
-    // 6. Construir matriz comparativa
-    const comparisonMatrix = mathService.buildComparisonMatrix(recommendation.storesWithScores);
-
-    // Obtener historial completo de la BD para retornar ordenado
-    const fullHistory = await getHistoryForProduct(productId);
-
-    return res.json({
-      product: {
-        id: productId,
-        nombre: primaryProd.name,
-        marca: primaryProd.brand,
-        categoria: primaryProd.category,
-        url_knasta: primaryProd.knastaUrl
-      },
-      stores: recommendation.storesWithScores,
-      priceHistory: fullHistory,
-      mathResults: storesAnalysis.map(sa => ({
-        storeName: sa.storeName,
-        currentPrice: sa.currentPrice,
-        linearFunction: sa.linearFunction,
-        derivative: sa.derivative,
-        derivativeStartDate: sa.derivativeStartDate,
-        derivativeEndDate: sa.derivativeEndDate,
-        averagePrice: sa.averagePrice,
-        limitEstimated: sa.limitEstimated,
-        projectedPrice: sa.projectedPrice,
-        weekProjection: sa.weekProjection,
-        projectionConfidence: sa.projectionConfidence
-      })),
-      comparisonMatrix,
-      recommendation,
-      externalFactors: {
-        dolar: externalIndicators.dolar,
-        ipc: externalIndicators.ipc,
-        isFallback: externalIndicators.isFallback,
-        upcomingEvents
-      }
-    });
-
+    return res.json(response);
   } catch (error) {
-    console.error('AnalysisController: Error al procesar análisis:', error.message);
-    return res.status(500).json({ error: error.message || 'Error interno al procesar el análisis.' });
+    console.error("runAnalysis:", error.message);
+    return res.status(503).json({
+      error:
+        "No se pudo completar la consulta a Knasta o el almacenamiento del análisis. Inténtalo nuevamente.",
+    });
   }
 }
-
-module.exports = {
-  getAnalysis,
-  runAnalysis
-};
+module.exports = { runAnalysis, getAnalysis, buildStore, buildResponse };

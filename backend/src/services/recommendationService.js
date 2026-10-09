@@ -3,12 +3,12 @@ const {
   calculateHistoricalMinScore,
   calculateTrendScore,
   calculateAverageScore,
-  calculateProjectionScore
-} = require('../utils/calculateScore');
+  calculateProjectionScore,
+} = require("../utils/calculateScore");
 
 /**
  * Calcula el puntaje de compra para una tienda específica basándose en su análisis.
- * @param {Object} storeAnalysis 
+ * @param {Object} storeAnalysis
  * @param {boolean} isCheapestStore Si es la tienda con el precio más bajo de todas
  * @returns {number} Puntaje entre 0 y 100
  */
@@ -20,35 +20,47 @@ function calculateStoreScore(storeAnalysis, isCheapestStore = false) {
     averagePrice,
     derivative,
     projectedPrice,
-    available
+    available,
   } = storeAnalysis;
 
-  if (!available) {
+  if (!available || !Number.isFinite(currentPrice) || currentPrice <= 0) {
     return 10; // Puntaje muy bajo si no está disponible
   }
 
-  const precioActualScore = calculateActualPriceScore(currentPrice, minPrice, maxPrice);
-  const precioHistoricoScore = calculateHistoricalMinScore(currentPrice, minPrice);
-  const tendenciaScore = calculateTrendScore(derivative);
+  const precioActualScore = calculateActualPriceScore(
+    currentPrice,
+    minPrice,
+    maxPrice,
+  );
+  const precioHistoricoScore = calculateHistoricalMinScore(
+    currentPrice,
+    minPrice,
+  );
+  const tendenciaScore =
+    derivative == null ? 50 : calculateTrendScore(derivative);
   const promedioScore = calculateAverageScore(currentPrice, averagePrice);
-  const proyeccionScore = calculateProjectionScore(currentPrice, projectedPrice);
+  const proyeccionScore =
+    projectedPrice == null
+      ? 50
+      : calculateProjectionScore(currentPrice, projectedPrice);
   const disponibilidadScore = 100; // Si llegó aquí, está disponible
 
-  let score = (
+  let score =
     precioActualScore * 0.25 +
-    precioHistoricoScore * 0.20 +
-    tendenciaScore * 0.20 +
+    precioHistoricoScore * 0.2 +
+    tendenciaScore * 0.2 +
     promedioScore * 0.15 +
-    proyeccionScore * 0.10 +
-    disponibilidadScore * 0.10
-  );
+    proyeccionScore * 0.1 +
+    disponibilidadScore * 0.1;
 
   // Regla especial: Si una tienda tiene el menor precio actual de todas, aumentar su puntaje
   if (isCheapestStore) {
     score += 10;
   }
 
-  return Math.min(100, Math.round(score));
+  return storeAnalysis.insufficientHistory || storeAnalysis.stale
+    ? Math.min(50, Math.round(score))
+    : Math.min(100, Math.round(score));
 }
 
 /**
@@ -57,92 +69,91 @@ function calculateStoreScore(storeAnalysis, isCheapestStore = false) {
  * @param {Array} upcomingEvents Eventos de retail (CyberDay, Black Friday, etc.) dentro de los próximos 7 días
  * @returns {Object} { decision, descripcion, puntaje_final, tienda_recomendada }
  */
-function generateRecommendation(storesAnalysis, upcomingEvents = []) {
+function generateRecommendation(storesAnalysis, retailEvent = null) {
   if (!Array.isArray(storesAnalysis) || storesAnalysis.length === 0) {
     return {
-      decision: 'Esperar',
-      descripcion: 'No hay datos de tiendas para analizar.',
+      decision: "Esperar",
+      descripcion: "No hay datos de tiendas para analizar.",
       puntaje_final: 0,
-      tienda_recomendada: null
+      tienda_recomendada: null,
+      storesWithScores: [],
     };
   }
 
   // Encontrar el precio más bajo de todas las tiendas disponibles
-  const availableStores = storesAnalysis.filter(s => s.available);
-  const minPriceOfAll = availableStores.length > 0 
-    ? Math.min(...availableStores.map(s => s.currentPrice))
-    : Infinity;
+  const availableStores = storesAnalysis.filter((s) => s.available);
+  const minPriceOfAll =
+    availableStores.length > 0
+      ? Math.min(...availableStores.map((s) => s.currentPrice))
+      : Infinity;
 
   // Calcular puntajes para cada tienda e identificar la recomendada (mayor puntaje)
-  const storesWithScores = storesAnalysis.map(store => {
+  const storesWithScores = storesAnalysis.map((store) => {
     const isCheapest = store.available && store.currentPrice === minPriceOfAll;
     const score = calculateStoreScore(store, isCheapest);
     return {
       ...store,
-      score
+      score,
     };
   });
 
   // Ordenar por puntaje descendente
   storesWithScores.sort((a, b) => b.score - a.score);
-  const recommendedStore = storesWithScores[0];
+  const recommendedStore =
+    storesWithScores.find((s) => s.available && !s.stale) ||
+    storesWithScores[0];
 
   // Determinar la decisión basándose en el análisis de la tienda recomendada
-  let decision = 'Esperar';
-  let descripcion = '';
+  let decision = "Esperar";
+  let descripcion = "";
 
-  const {
-    currentPrice,
-    minPrice,
-    averagePrice,
-    derivative,
-    projectedPrice,
-    discount,
-    storeName,
-    weekProjection
-  } = recommendedStore;
+  const { currentPrice, minPrice, averagePrice, storeName, weekProjection } =
+    recommendedStore;
 
-  // Si hay un evento de retail (CyberDay, Black Friday, Navidad, etc.) dentro de los próximos
-  // 7 días y el mínimo proyectado para esa tienda en la semana es notoriamente menor al precio
-  // actual, priorizamos avisar del evento por sobre las demás reglas (salvo que ya esté en su
-  // mínimo histórico, en cuyo caso comprar ahora sigue siendo mejor idea).
-  const proximoEvento = upcomingEvents && upcomingEvents.length > 0 ? upcomingEvents[0] : null;
-  const minProyectadoSemana = Array.isArray(weekProjection) && weekProjection.length > 0
-    ? Math.min(...weekProjection.map(d => d.projectedPrice))
-    : projectedPrice;
-
-  // Reglas de recomendación estructuradas
+  const minimumProjected =
+    Array.isArray(weekProjection) && weekProjection.length
+      ? Math.min(...weekProjection.map((d) => d.projectedPrice))
+      : null;
+  const usableForecast =
+    minimumProjected != null &&
+    recommendedStore.projectionConfidence >= 50 &&
+    recommendedStore.regression?.rSquared >= 0.5;
   if (!recommendedStore.available) {
-    decision = 'Esperar';
-    descripcion = `El producto no está disponible en las tiendas analizadas en este momento. Recomendamos activar alertas en Knasta.`;
+    descripcion =
+      "No hay publicaciones disponibles en las tiendas analizadas. Consulta la disponibilidad en Knasta.";
+  } else if (recommendedStore.stale) {
+    decision = "Datos desactualizados";
+    descripcion = `El último precio observado es del ${recommendedStore.currentDate}. Consulta la tienda antes de decidir; la proyección parte de esa fecha.`;
+  } else if (recommendedStore.insufficientHistory) {
+    decision = "Datos insuficientes";
+    descripcion =
+      "El precio observado se muestra como referencia. Se requieren al menos tres fechas válidas y siete días de historial para proyectar o recomendar una compra.";
+  } else if (
+    retailEvent?.status === "active" &&
+    recommendedStore.eventPriceComparison?.status === "lower" &&
+    currentPrice <= minPrice * 1.02
+  ) {
+    decision = "Comprar ahora";
+    descripcion = `El precio publicado en ${storeName} ya es ${recommendedStore.eventPriceComparison.reductionPercent.toFixed(1)}% menor que la última observación anterior al Cyber y está cerca del mínimo histórico observado. Es una oportunidad según los precios reales disponibles.`;
+  } else if (usableForecast && minimumProjected < currentPrice * 0.98) {
+    decision = "Esperar";
+    descripcion = `El ajuste histórico estima un precio de hasta $${minimumProjected.toLocaleString("es-CL")} en los próximos siete días desde la última observación. Podría convenir esperar, aunque la extrapolación no garantiza esa bajada.`;
   } else if (currentPrice <= minPrice * 1.02) {
-    // Si el precio actual está cerca del precio mínimo histórico (dentro del 2%)
-    decision = 'Comprar ahora';
-    descripcion = `¡Excelente oportunidad! El precio actual en ${storeName} ($${currentPrice.toLocaleString()}) está en su mínimo histórico registrado ($${minPrice.toLocaleString()}). Es el mejor momento para comprar.`;
-  } else if (proximoEvento && minProyectadoSemana <= currentPrice * (1 + proximoEvento.impactoPromedio * 0.5)) {
-    // Si viene un evento de retail dentro de la semana y la proyección indica una baja relevante
-    decision = 'Esperar evento';
-    descripcion = `Se acerca ${proximoEvento.nombre} (en ${proximoEvento.diasRestantes} día${proximoEvento.diasRestantes === 1 ? '' : 's'}, el ${proximoEvento.fecha}). Nuestro modelo proyecta que el precio en ${storeName} podría bajar hasta $${minProyectadoSemana.toLocaleString()} durante ese evento, por lo que conviene esperar.`;
-  } else if (projectedPrice < currentPrice && derivative < 0) {
-    // Si la derivada es negativa y el precio proyectado es menor
-    decision = 'Esperar';
-    descripcion = `El precio en ${storeName} está bajando a una tasa de $${Math.abs(derivative).toLocaleString()} por día. Te recomendamos esperar ya que la proyección a 7 días indica un valor menor (hasta $${minProyectadoSemana.toLocaleString()}) en los próximos días.`;
+    decision = "Comprar ahora";
+    descripcion = `El precio publicado en ${storeName} ($${currentPrice.toLocaleString("es-CL")}) está cerca del mínimo del período observado ($${minPrice.toLocaleString("es-CL")}). Es una oportunidad según este historial; verifica las condiciones en la tienda.`;
   } else if (currentPrice < averagePrice) {
-    // Si el precio actual está bajo el promedio histórico
-    decision = 'Buena oportunidad';
-    descripcion = `El precio actual en ${storeName} ($${currentPrice.toLocaleString()}) se encuentra por debajo del promedio histórico de la tienda ($${Math.round(averagePrice).toLocaleString()}). Cuenta con un descuento del ${discount}%.`;
-  } else if (derivative > 0) {
-    // Si la derivada es positiva (precio subiendo)
-    decision = 'Precio en aumento';
-    descripcion = `¡Cuidado! El precio en ${storeName} está subiendo. El valor actual es de $${currentPrice.toLocaleString()} y la proyección a 7 días no muestra bajas. Si necesitas el producto urgente, compra pronto antes de otra alza.`;
-  } else if (projectedPrice > currentPrice) {
-    // Si el precio proyectado es mayor que el actual
-    decision = 'Comprar pronto';
-    descripcion = `El modelo de regresión con estacionalidad proyecta un incremento cercano en el precio de ${storeName} hacia los $${projectedPrice.toLocaleString()}. Sugerimos realizar la compra pronto para evitar el aumento.`;
+    decision = "Buena oportunidad";
+    descripcion = `El precio publicado en ${storeName} ($${currentPrice.toLocaleString("es-CL")}) está bajo el promedio ponderado del período observado ($${Math.round(averagePrice).toLocaleString("es-CL")}). La comparación no garantiza precios futuros.`;
+  } else if (usableForecast && minimumProjected > currentPrice * 1.02) {
+    decision = "Comprar pronto";
+    descripcion = `La regresión estima precios mayores al actual durante los próximos siete días desde la última observación. Si necesitas el producto, considera el precio publicado; la predicción puede fallar.`;
   } else {
-    // Default estable
-    decision = 'Esperar';
-    descripcion = `El precio actual en ${storeName} es de $${currentPrice.toLocaleString()}, el cual se mantiene estable. Dado que no hay descuentos significativos ni proyecciones de bajada, sugerimos esperar a una mejor oferta.`;
+    decision = "Sin señal clara";
+    descripcion = `El precio publicado en ${storeName} es $${currentPrice.toLocaleString("es-CL")}. Los indicadores no ofrecen una señal suficiente para recomendar comprar o esperar. Revisa el historial, el R² y las condiciones de la tienda.`;
+  }
+
+  if (retailEvent?.status === "active") {
+    descripcion += ` ${retailEvent.nombre} ya está en curso y finaliza el ${retailEvent.endLabel}. Las proyecciones no garantizan que el descuento siga vigente después del evento; confirma stock y condiciones en la tienda.`;
   }
 
   return {
@@ -152,13 +163,13 @@ function generateRecommendation(storesAnalysis, upcomingEvents = []) {
     tienda_recomendada: {
       id: recommendedStore.storeId,
       nombre: storeName,
-      precio: currentPrice
+      precio: currentPrice,
     },
-    storesWithScores // Devolvemos también la lista completa con puntajes actualizados
+    storesWithScores, // Devolvemos también la lista completa con puntajes actualizados
   };
 }
 
 module.exports = {
   calculateStoreScore,
-  generateRecommendation
+  generateRecommendation,
 };

@@ -1,11 +1,11 @@
-import formatCurrency from '../utils/formatCurrency';
-import { Award } from 'lucide-react';
+import formatCurrency from "../utils/formatCurrency";
+import { Award } from "lucide-react";
 
 export default function MatrixTable({ comparisonMatrix }) {
   if (!comparisonMatrix || comparisonMatrix.length === 0) return null;
 
   // Encontrar el puntaje máximo para destacar
-  const scores = comparisonMatrix.map(row => row[10] || 0);
+  const scores = comparisonMatrix.map((row) => row[10] || 0);
   const maxScore = Math.max(...scores);
 
   return (
@@ -22,12 +22,14 @@ export default function MatrixTable({ comparisonMatrix }) {
               <th className="py-3 px-3 text-right">Mín. Hist.</th>
               <th className="py-3 px-3 text-right">Máx. Hist.</th>
               <th className="py-3 px-3 text-center">Desc.</th>
-              <th className="py-3 px-3 text-center">Disp.</th>
+              <th className="py-3 px-3 text-center">Publicación</th>
               <th className="py-3 px-3 text-right">Derivada</th>
               <th className="py-3 px-3 text-right">Promedio</th>
-              <th className="py-3 px-3 text-right">Lím. (L)</th>
+              <th className="py-3 px-3 text-right">Mín. observado</th>
               <th className="py-3 px-3 text-right">Proyección</th>
-              <th className="py-3 px-3 text-center text-indigo-400 font-extrabold bg-indigo-500/5">Puntaje Final</th>
+              <th className="py-3 px-3 text-center text-indigo-400 font-extrabold bg-indigo-500/5">
+                Puntaje Final
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/50">
@@ -43,16 +45,18 @@ export default function MatrixTable({ comparisonMatrix }) {
                 averagePrice,
                 limitEstimated,
                 projectedPrice,
-                score
+                score,
               ] = row;
 
               const isBest = score === maxScore && maxScore > 0;
 
               return (
-                <tr 
-                  key={index} 
+                <tr
+                  key={index}
                   className={`hover:bg-slate-800/30 transition-colors ${
-                    isBest ? 'bg-indigo-500/5 font-semibold text-indigo-200' : 'text-slate-300'
+                    isBest
+                      ? "bg-indigo-500/5 font-semibold text-indigo-200"
+                      : "text-slate-300"
                   }`}
                 >
                   <td className="py-3.5 px-3 font-semibold flex items-center gap-1.5">
@@ -69,17 +73,32 @@ export default function MatrixTable({ comparisonMatrix }) {
                     {formatCurrency(maxPrice)}
                   </td>
                   <td className="py-3.5 px-3 text-center">
-                    {discount > 0 ? `${discount}%` : '-'}
+                    {discount > 0 ? `${discount}%` : "-"}
                   </td>
                   <td className="py-3.5 px-3 text-center">
-                    <span className={`inline-block w-2.5 h-2.5 rounded-full ${
-                      available ? 'bg-emerald-500' : 'bg-rose-500'
-                    }`} title={available ? 'Disponible' : 'Agotado'} />
+                    <span
+                      className={
+                        available ? "text-emerald-400" : "text-rose-400"
+                      }
+                    >
+                      {available ? "Publicado" : "No disponible"}
+                    </span>
                   </td>
-                  <td className={`py-3.5 px-3 text-right font-mono ${
-                    derivative < 0 ? 'text-emerald-400' : (derivative > 0 ? 'text-rose-400' : 'text-amber-400')
-                  }`}>
-                    {derivative > 0 ? '+' : ''}{derivative}
+                  <td
+                    className={`py-3.5 px-3 text-right font-mono ${
+                      derivative < 0
+                        ? "text-emerald-400"
+                        : derivative > 0
+                          ? "text-rose-400"
+                          : "text-amber-400"
+                    }`}
+                  >
+                    {derivative > 0 ? "+" : ""}
+                    {derivative == null
+                      ? "—"
+                      : derivative.toLocaleString("es-CL", {
+                          maximumFractionDigits: 2,
+                        })}
                   </td>
                   <td className="py-3.5 px-3 text-right text-slate-400 font-mono">
                     {formatCurrency(averagePrice)}
@@ -90,9 +109,11 @@ export default function MatrixTable({ comparisonMatrix }) {
                   <td className="py-3.5 px-3 text-right text-slate-200 font-mono font-bold">
                     {formatCurrency(projectedPrice)}
                   </td>
-                  <td className={`py-3.5 px-3 text-center font-bold text-sm bg-indigo-500/5 ${
-                    isBest ? 'text-indigo-300 font-black' : 'text-slate-400'
-                  }`}>
+                  <td
+                    className={`py-3.5 px-3 text-center font-bold text-sm bg-indigo-500/5 ${
+                      isBest ? "text-indigo-300 font-black" : "text-slate-400"
+                    }`}
+                  >
                     {score}/100
                   </td>
                 </tr>

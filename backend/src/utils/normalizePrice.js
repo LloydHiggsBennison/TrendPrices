@@ -1,17 +1,15 @@
-/**
- * Normaliza un precio en formato texto o número a un valor entero limpio.
- * Ejemplo: "$ 99.990" -> 99990
- * @param {string|number} priceVal 
- * @returns {number}
- */
-function normalizePrice(priceVal) {
-  if (priceVal === null || priceVal === undefined) return 0;
-  if (typeof priceVal === 'number') return Math.round(priceVal);
-  
-  // Quitar signo $, puntos, comas, espacios y convertir a entero
-  const cleanStr = priceVal.replace(/[^0-9]/g, '');
-  const parsed = parseInt(cleanStr, 10);
-  return isNaN(parsed) ? 0 : parsed;
+function normalizePrice(value) {
+  if (typeof value === "number")
+    return Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
+  if (typeof value !== "string" || value.includes("-")) return 0;
+  let text = value.trim().replace(/\$/g, "").replace(/\s/g, "");
+  if (!/^[0-9]+(?:[.,][0-9]+)*$/.test(text)) return 0;
+  const decimal = text.match(/[.,]([0-9]{1,2})$/);
+  if (decimal) {
+    const integer = text.slice(0, decimal.index).replace(/[.,]/g, "");
+    text = `${integer}.${decimal[1]}`;
+  } else text = text.replace(/[.,]/g, "");
+  const number = Number(text);
+  return Number.isFinite(number) && number > 0 ? Math.round(number) : 0;
 }
-
 module.exports = normalizePrice;

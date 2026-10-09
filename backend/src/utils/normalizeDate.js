@@ -1,53 +1,21 @@
-/**
- * Normaliza una fecha a formato YYYY-MM-DD
- * Soporta formatos: "DD-MM-YYYY", "YYYY-MM-DD" e instancias de Date.
- * @param {string|Date} dateVal 
- * @returns {string}
- */
-function normalizeDate(dateVal) {
-  if (!dateVal) return new Date().toISOString().split('T')[0];
-  
-  if (dateVal instanceof Date) {
-    return dateVal.toISOString().split('T')[0];
+// Invalid dates must never become observations dated today.
+function normalizeDate(value) {
+  if (value instanceof Date)
+    return Number.isFinite(value.getTime())
+      ? value.toISOString().slice(0, 10)
+      : null;
+  if (typeof value !== "string") return null;
+  let match = value.trim().match(/^(\d{4})[-/](\d{2})[-/](\d{2})(?:T.*)?$/);
+  if (!match) {
+    const reversed = value.trim().match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+    if (!reversed) return null;
+    match = [reversed[0], reversed[3], reversed[2], reversed[1]];
   }
-  
-  if (typeof dateVal === 'string') {
-    // Si tiene guión y el formato es DD-MM-YYYY
-    const partsDash = dateVal.split('-');
-    if (partsDash.length === 3) {
-      if (partsDash[0].length === 2 && partsDash[2].length === 4) {
-        // DD-MM-YYYY -> YYYY-MM-DD
-        return `${partsDash[2]}-${partsDash[1]}-${partsDash[0]}`;
-      }
-      if (partsDash[0].length === 4) {
-        // YYYY-MM-DD
-        return dateVal;
-      }
-    }
-
-    // Si tiene slash (/) y el formato es DD/MM/YYYY o YYYY/MM/DD
-    const partsSlash = dateVal.split('/');
-    if (partsSlash.length === 3) {
-      if (partsSlash[0].length === 2 && partsSlash[2].length === 4) {
-        return `${partsSlash[2]}-${partsSlash[1]}-${partsSlash[0]}`;
-      }
-      if (partsSlash[0].length === 4) {
-        return `${partsSlash[0]}-${partsSlash[1]}-${partsSlash[2]}`;
-      }
-    }
-  }
-  
-  // Intento fallback con constructor Date
-  try {
-    const d = new Date(dateVal);
-    if (!isNaN(d.getTime())) {
-      return d.toISOString().split('T')[0];
-    }
-  } catch (e) {
-    // ignorar y retornar fecha de hoy
-  }
-  
-  return new Date().toISOString().split('T')[0];
+  const iso = `${match[1]}-${match[2]}-${match[3]}`;
+  const date = new Date(`${iso}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) &&
+    date.toISOString().slice(0, 10) === iso
+    ? iso
+    : null;
 }
-
 module.exports = normalizeDate;

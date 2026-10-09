@@ -1,126 +1,92 @@
-const axios = require('axios');
-
-/**
- * Servicio de Variables Externas (Macroeconómicas)
- * -------------------------------------------------
- * Obtiene indicadores económicos reales de Chile desde mindicador.cl (API pública, gratuita,
- * mantenida por la comunidad y usada ampliamente por proyectos chilenos: dólar observado, UF, UTM, IPC).
- * Estos indicadores se usan para ajustar la proyección de precios a 7 días:
- *  - El tipo de cambio USD/CLP afecta a productos importados (electrónica, tecnología, etc.)
- *  - El IPC (inflación) genera una deriva de largo plazo sobre el nivel general de precios.
- *
- * Se cachea en memoria por un tiempo prudente para no saturar la API externa ni volver
- * lenta cada consulta (estos indicadores no cambian más de una vez al día).
- */
-
-const BASE_URL = 'https://mindicador.cl/api';
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 horas
-
-let cache = {
-  data: null,
-  fetchedAt: 0
-};
-
-/**
- * Calcula la pendiente (tendencia) simple de una serie de valores numéricos ordenados cronológicamente.
- * Reutiliza el mismo principio de regresión lineal por mínimos cuadrados que el resto del sistema.
- */
-function calculateSeriesTrend(values) {
-  const n = values.length;
-  if (n < 2) return 0;
-
-  let sumT = 0, sumV = 0, sumTV = 0, sumT2 = 0;
-  for (let t = 0; t < n; t++) {
-    sumT += t;
-    sumV += values[t];
-    sumTV += t * values[t];
-    sumT2 += t * t;
+const axios = require("axios");
+const BASE_URL = "https://mindicador.cl/api";
+const TTL = 6 * 60 * 60 * 1000;
+let cache = null;
+function summarizeIndicators(dollarRows, inflationRows) {
+  const dollars = (dollarRows || [])
+    .filter(
+      (s) =>
+        Number.isFinite(s.valor) &&
+        s.valor > 0 &&
+        Number.isFinite(Date.parse(s.fecha)),
+    )
+    .sort((a, b) => Date.parse(a.fecha) - Date.parse(b.fecha));
+  const months = new Map();
+  for (const row of (inflationRows || [])
+    .filter(
+      (s) => Number.isFinite(s.valor) && Number.isFinite(Date.parse(s.fecha)),
+    )
+    .sort((a, b) => Date.parse(b.fecha) - Date.parse(a.fecha))) {
+    const month = row.fecha.slice(0, 7);
+    if (!months.has(month)) months.set(month, row);
   }
-  const denom = n * sumT2 - sumT * sumT;
-  if (denom === 0) return 0;
-  return (n * sumTV - sumT * sumV) / denom;
-}
-
-/**
- * Valores de respaldo conservadores en caso de que la API externa no esté disponible.
- * Se marcan explícitamente como fallback para que el frontend pueda advertir al usuario
- * que la confiabilidad del ajuste macroeconómico es menor.
- */
-function getFallbackIndicators() {
+  const ipc = [...months.values()].slice(0, 12);
+  if (dollars.length < 2 || !ipc.length)
+    throw new Error("Series económicas incompletas");
+  const latest = dollars.at(-1);
+  const week = dollars.filter(
+    (s) => Date.parse(s.fecha) >= Date.parse(latest.fecha) - 7 * 86400000,
+  );
+  const first = week[0];
+  const days = (Date.parse(latest.fecha) - Date.parse(first.fecha)) / 86400000;
+  const change =
+    days > 0 ? ((latest.valor / first.valor - 1) * 100 * 7) / days : null;
+  const lastMonth = new Date(`${ipc[0].fecha.slice(0, 7)}-01T00:00:00Z`);
+  const completeYear =
+    ipc.length === 12 &&
+    ipc.every((row, index) => {
+      const expected = new Date(lastMonth);
+      expected.setUTCMonth(lastMonth.getUTCMonth() - index);
+      return row.fecha.slice(0, 7) === expected.toISOString().slice(0, 7);
+    });
+  const accumulated = completeYear
+    ? (ipc.reduce((total, row) => total * (1 + row.valor / 100), 1) - 1) * 100
+    : null;
   return {
     dolar: {
-      valorActual: 970,
-      variacionPorcentual7d: 0,
-      serie: [],
-      fuente: 'fallback'
+      valorActual: latest.valor,
+      variacionPorcentual7d: change == null ? null : Number(change.toFixed(3)),
+      serie: week.map((s) => s.valor),
+      fecha: latest.fecha,
+      fuente: "mindicador.cl",
+      stale: Date.now() - Date.parse(latest.fecha) > 7 * 86400000,
     },
     ipc: {
-      valorMensual: 0.4, // % mensual, promedio histórico conservador para Chile
-      acumulado12m: 4.0,
-      fuente: 'fallback'
+      valorMensual: ipc[0].valor,
+      acumulado12m: accumulated == null ? null : Number(accumulated.toFixed(2)),
+      fecha: ipc[0].fecha,
+      fuente: "mindicador.cl",
+      stale: Date.now() - Date.parse(ipc[0].fecha) > 62 * 86400000,
     },
     fetchedAt: new Date().toISOString(),
-    isFallback: true
+    isFallback: false,
   };
 }
-
-/**
- * Obtiene y calcula los indicadores externos (dólar + IPC), usando caché en memoria.
- * @returns {Promise<Object>}
- */
 async function getExternalIndicators() {
-  const now = Date.now();
-  if (cache.data && (now - cache.fetchedAt) < CACHE_TTL_MS) {
-    return cache.data;
-  }
-
+  if (cache && Date.now() < cache.expires) return cache.data;
   try {
-    const [dolarRes, ipcRes] = await Promise.all([
+    const [dollar, ipc] = await Promise.all([
       axios.get(`${BASE_URL}/dolar`, { timeout: 8000 }),
-      axios.get(`${BASE_URL}/ipc`, { timeout: 8000 })
+      axios.get(`${BASE_URL}/ipc`, { timeout: 8000 }),
     ]);
-
-    const dolarSerie = (dolarRes.data?.serie || [])
-      .slice(0, 7) // mindicador retorna del más reciente al más antiguo
-      .reverse()
-      .map(s => s.valor);
-
-    const dolarActual = dolarSerie.length > 0 ? dolarSerie[dolarSerie.length - 1] : 970;
-    const dolarTrendAbs = calculateSeriesTrend(dolarSerie); // CLP por día
-    const dolarVariacion7d = dolarActual > 0 ? (dolarTrendAbs * 7 / dolarActual) * 100 : 0;
-
-    const ipcSerie = (ipcRes.data?.serie || []).slice(0, 12);
-    const ipcMensual = ipcSerie.length > 0 ? ipcSerie[0].valor : 0.4;
-    const ipcAcumulado12m = ipcSerie.reduce((acc, s) => acc + (s.valor || 0), 0);
-
-    const result = {
-      dolar: {
-        valorActual: dolarActual,
-        variacionPorcentual7d: parseFloat(dolarVariacion7d.toFixed(3)),
-        serie: dolarSerie,
-        fuente: 'mindicador.cl'
-      },
-      ipc: {
-        valorMensual: ipcMensual,
-        acumulado12m: parseFloat(ipcAcumulado12m.toFixed(2)),
-        fuente: 'mindicador.cl'
-      },
-      fetchedAt: new Date().toISOString(),
-      isFallback: false
-    };
-
-    cache = { data: result, fetchedAt: now };
-    return result;
+    const data = summarizeIndicators(dollar.data?.serie, ipc.data?.serie);
+    cache = { data, expires: Date.now() + TTL };
+    return data;
   } catch (error) {
-    console.warn('ExternalFactorsService: No se pudo obtener indicadores de mindicador.cl. Usando fallback. Error:', error.message);
-    const fallback = getFallbackIndicators();
-    // Cacheamos también el fallback por un tiempo corto para no reintentar en cada request
-    cache = { data: fallback, fetchedAt: now - CACHE_TTL_MS + 5 * 60 * 1000 }; // reintenta en 5 min
-    return fallback;
+    console.warn("Indicadores económicos no disponibles:", error.message);
+    const data = {
+      dolar: {
+        valorActual: null,
+        variacionPorcentual7d: null,
+        serie: [],
+        fuente: "no_disponible",
+      },
+      ipc: { valorMensual: null, acumulado12m: null, fuente: "no_disponible" },
+      fetchedAt: new Date().toISOString(),
+      isFallback: true,
+    };
+    cache = { data, expires: Date.now() + 5 * 60 * 1000 };
+    return data;
   }
 }
-
-module.exports = {
-  getExternalIndicators,
-  calculateSeriesTrend
-};
+module.exports = { getExternalIndicators, summarizeIndicators };

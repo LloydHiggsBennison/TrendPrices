@@ -12,3 +12,4 @@ build/
 .gemini/
 *backup*/
 .backup_*/
+supabase/.temp/
