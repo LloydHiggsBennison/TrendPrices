@@ -3,6 +3,7 @@ const cheerio = require("cheerio");
 const normalizePrice = require("../utils/normalizePrice");
 const normalizeDate = require("../utils/normalizeDate");
 const { cleanHistory } = require("../utils/cleanHistory");
+const { filterSearchResults, normalize } = require("../utils/searchRelevance");
 
 // User agent para simular navegación real y ser responsables
 const USER_AGENT =
@@ -30,7 +31,7 @@ function slugify(text) {
  * @param {string} query
  * @returns {Promise<Array>}
  */
-async function searchProduct(query) {
+async function searchProduct(query, { includeMetadata = false } = {}) {
   try {
     const url = `https://knasta.cl/results?q=${encodeURIComponent(query)}`;
     console.log(`KnastaService: Buscando en Knasta.cl: ${url}`);
@@ -47,10 +48,13 @@ async function searchProduct(query) {
     const scriptText = $("#__NEXT_DATA__").html();
 
     let products = [];
+    let sourceQuery = query;
 
     if (scriptText) {
       try {
         const parsed = JSON.parse(scriptText);
+        sourceQuery =
+          parsed.query?.q || parsed.props?.pageProps?.initialData?.q || query;
         const initialProducts =
           parsed.props?.pageProps?.initialData?.products || [];
 
@@ -148,7 +152,22 @@ async function searchProduct(query) {
       });
     }
 
-    return products.filter((p) => p.currentPrice > 0 && p.name && p.knastaUrl);
+    const valid = products.filter(
+      (p) => p.currentPrice > 0 && p.name && p.knastaUrl,
+    );
+    const matches = filterSearchResults(valid, query);
+    return includeMetadata
+      ? {
+          products: matches,
+          searchInfo: {
+            requestedQuery: query,
+            sourceQuery,
+            corrected:
+              normalize(sourceQuery).trim() !== normalize(query).trim(),
+            excludedCount: valid.length - matches.length,
+          },
+        }
+      : matches;
   } catch (error) {
     console.error(
       `KnastaService: Error en searchProduct para "${query}":`,

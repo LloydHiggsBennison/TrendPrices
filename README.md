@@ -27,7 +27,7 @@ Las tablas requeridas se describen en [backend/sql/schema.sql](backend/sql/schem
 ## Uso y datos
 
 1. Busca un producto.
-2. Selecciona la publicación exacta revisando modelo, capacidad, color y condición.
+2. Selecciona la publicación exacta revisando modelo, capacidad, color y condición. Las tarjetas muestran imagen, tienda, precio y fecha; puedes filtrar por tienda y ordenar por precio. Si Knasta corrige la búsqueda, se indica expresamente y se excluyen publicaciones con identificadores numéricos de modelo o capacidad diferentes. El filtro es conservador: puede excluir publicaciones que omitan esos números en el título.
 3. Se comparan como máximo cinco tiendas con el mismo nombre completo normalizado. Este criterio conservador puede excluir publicaciones equivalentes con nombres diferentes; no se infiere equivalencia por palabras parciales.
 4. La API vuelve a validar la selección contra Knasta. No acepta URLs arbitrarias para extraer información.
 5. Fechas inválidas y precios ausentes, no finitos o no positivos se descartan. Las observaciones repetidas del mismo día se actualizan.
@@ -64,7 +64,7 @@ npm run lint
 npm run build
 ```
 
-Las 29 pruebas cubren fórmulas conocidas, fechas irregulares, datos inválidos, selección de variantes, flujo POST/GET, repetición sin duplicados, fallos de fuente, paginación de más de 1000 registros, errores de persistencia, indicadores económicos y compatibilidad de la API. Las pruebas usan memoria o dobles de servicios y no escriben en una base real.
+Las 32 pruebas cubren fórmulas conocidas, fechas irregulares, datos inválidos, selección de variantes, flujo POST/GET, repetición sin duplicados, fallos de fuente, paginación de más de 1000 registros, errores de persistencia, indicadores económicos y compatibilidad de la API. Las pruebas usan memoria o dobles de servicios y no escriben en una base real.
 
 ## Despliegue
 
