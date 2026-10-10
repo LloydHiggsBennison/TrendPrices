@@ -8,7 +8,7 @@ import PriceHistoryChart from "../components/PriceHistoryChart";
 import MathResults from "../components/MathResults";
 import WeekProjection from "../components/WeekProjection";
 import AnalysisNotices from "../components/AnalysisNotices";
-import formatCurrency from "../utils/formatCurrency";
+import ProductResults from "../components/ProductResults";
 import MatrixTable from "../components/MatrixTable";
 import RecommendationCard from "../components/RecommendationCard";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -23,9 +23,13 @@ export default function Home() {
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [inputQuery, setInputQuery] = useState("");
+  const [searchInfo, setSearchInfo] = useState(null);
 
   const handleSearch = async (query) => {
     setProducts([]);
+    setSearchInfo(null);
+    setInputQuery(query);
     setSearchQuery(query);
     setIsLoading(true);
     setError(null);
@@ -33,8 +37,7 @@ export default function Home() {
     try {
       const data = await searchProducts(query);
       setProducts(data.products || []);
-      if (!data.products?.length)
-        setError("No se encontraron productos con precios válidos.");
+      setSearchInfo(data.searchInfo || { requestedQuery: query });
     } catch (err) {
       console.error(err);
       setError(
@@ -78,7 +81,12 @@ export default function Home() {
       <CyberBanner />
       {/* Input de Búsqueda */}
       <div className="mb-16">
-        <SearchForm onSearch={handleSearch} isLoading={isLoading} />
+        <SearchForm
+          onSearch={handleSearch}
+          isLoading={isLoading}
+          query={inputQuery}
+          onQueryChange={setInputQuery}
+        />
         <div className="text-center mt-3 text-xs text-slate-500 flex items-center justify-center gap-1">
           <Shield size={12} />
           <span>Extracción responsable de datos desde Knasta.cl</span>
@@ -89,37 +97,16 @@ export default function Home() {
       {isLoading && <LoadingSpinner />}
       {error && <ErrorMessage message={error} onRetry={() => setError(null)} />}
 
-      {products.length > 0 && !analysisData && (
-        <section className="mb-8">
-          <h2 className="text-2xl font-bold mb-2 text-slate-100">
-            Selecciona el producto exacto
-          </h2>
-          <p className="text-sm text-slate-400 mb-4">
-            Revisa modelo, capacidad, color y condición. Solo se comparan
-            publicaciones con el mismo nombre completo.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {products.map((product) => (
-              <button
-                key={product.id}
-                disabled={isLoading}
-                onClick={() => handleSelect(product)}
-                className="glass-card p-4 rounded-xl text-left hover:border-indigo-500 disabled:opacity-50"
-              >
-                <span className="block font-semibold text-slate-100">
-                  {product.name}
-                </span>
-                <span className="block text-sm text-slate-400 mt-2">
-                  {product.retailLabel || product.retail} ·{" "}
-                  {formatCurrency(product.currentPrice)}
-                </span>
-                <span className="block text-xs text-indigo-300 mt-2">
-                  Analizar este producto
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
+      {searchInfo && !analysisData && (
+        <ProductResults
+          key={searchQuery}
+          products={products}
+          query={searchQuery}
+          searchInfo={searchInfo}
+          isLoading={isLoading}
+          onSelect={handleSelect}
+          onSearch={handleSearch}
+        />
       )}
 
       {/* Resultados del Análisis */}
@@ -162,7 +149,7 @@ export default function Home() {
       )}
 
       {/* Landing informativo si no hay análisis */}
-      {!isLoading && !analysisData && !error && products.length === 0 && (
+      {!isLoading && !analysisData && !error && !searchInfo && (
         <section className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-12 pt-12 border-t border-slate-800/60">
           <div className="glass-card rounded-2xl p-6 text-center">
             <div className="inline-flex items-center justify-center p-3 bg-indigo-500/10 text-indigo-400 rounded-xl mb-4">

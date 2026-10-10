@@ -13,8 +13,10 @@ async function searchProducts(req, res) {
         .json({ error: 'El parámetro "query" es requerido.' });
     }
 
-    const products = await knastaService.searchProduct(query);
-    return res.json({ products });
+    const result = await knastaService.searchProduct(query, {
+      includeMetadata: true,
+    });
+    return res.json(Array.isArray(result) ? { products: result } : result);
   } catch (error) {
     console.error(
       "ProductController: Error al buscar productos:",
